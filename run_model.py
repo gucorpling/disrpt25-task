@@ -33,6 +33,7 @@ def load_rels_dataset(dev_filepath, train_filepath):
             "type": types,
             "u1": u1s,
             "u2": u2s,
+            "text": [f"{u1} {u2}" for u1, u2 in zip(u1s, u2s)],
             "direction": directions,
         })
 
@@ -61,11 +62,31 @@ class TransformerClassifier(nn.Module):
         outputs = self.linear(outputs.last_hidden_state)
         return outputs
 
+
 def train(model_name, dev_dataset, train_dataset):
     """The function uses huggingface to train model with dataset"""
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    collator = DataCollatorWithPadding(tokenizer=tokenizer)
-    model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=17)
+    dev_labels = dev_dataset['label']
+    train_labels = train_dataset['label']
+    assert set(dev_labels) == set(train_labels), "Labels in dev and train datasets do not match"
+    label2id = {label: i for i, label in enumerate(sorted(dev_labels))}
+    id2label = {i: label for label, i in label2id.items()}
+    # Tokenize the dataset for the model
+    dev_dataset = dev_dataset.map(
+        lambda x: tokenizer(x['text'], padding='max_length', truncation=True, max_length=512),
+        batched=True,
+        remove_columns=['text', 'u1', 'u2', 'type', 'direction']
+    )
+    train_dataset = train_dataset.map(
+        lambda x: tokenizer(x['text'], padding='max_length', truncation=True, max_length=512),
+        batched=True,
+        remove_columns=['text', 'u1', 'u2', 'type', 'direction']
+    )
+    # Encode labels as integers
+    dev_dataset = dev_dataset.map(lambda x: {'label': label2id[x['label']]}, remove_columns=['label'])
+    train_dataset = train_dataset.map(lambda x: {'label': label2id[x['label']]}, remove_columns=['label'])
+    collator = DataCollatorWithPadding(tokenizer=tokenizer, padding=True, max_length=512)
+    model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=17, label2id=label2id, id2label=id2label)
     training_args = TrainingArguments(
         output_dir="./results",
         learning_rate=2e-5,
@@ -75,21 +96,22 @@ def train(model_name, dev_dataset, train_dataset):
     )
     trainer = Trainer(
         model=model,
-        training_args=training_args,
+        args=training_args,
         train_dataset=train_dataset,
-        validation_dataset=dev_dataset,
-        collate_fn=collator,
+        eval_dataset=dev_dataset,
+        data_collator=collator,
     )
     trainer.train()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("dev", type=str)
-    parser.add_argument("train", type=str)
-    parser.add_argument("model_name", type=str)
+    parser.add_argument("--dev", type=str, required=True)
+    parser.add_argument("--train", type=str, required=True)
+    parser.add_argument("--test", type=str, required=False)
+    parser.add_argument("--model_name", type=str, required=True,)
     args = parser.parse_args()
     dataset = load_rels_dataset(args.dev, args.train)
-    # train(model_name=args.model_name, dev_dataset=dataset, train_dataset=dataset)
+    train(model_name=args.model_name, dev_dataset=dataset['dev'], train_dataset=dataset['train'])
     print(dataset)
 
 
