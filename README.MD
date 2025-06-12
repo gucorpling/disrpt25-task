@@ -5,14 +5,14 @@
 We use conda for maintaining a python Dev environment and `requirements.txt` for cataloguing the dependencies
 1. Create (or activate) the environment.
 ```bash
-conda create -n disrpt python==3.9
+conda create -n disrpt python==3.10
 conda activate disrpt
 ```
 
 2. Install dependencies
 Dependencies can be installed with
 ```
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 ## Preparing Data
