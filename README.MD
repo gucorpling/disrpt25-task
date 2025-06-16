@@ -5,7 +5,7 @@
 We use conda for maintaining a python Dev environment and `requirements.txt` for cataloguing the dependencies
 1. Create (or activate) the environment.
 ```bash
-conda create -n disrpt python==3.9
+conda create -n disrpt python==3.10
 conda activate disrpt
 ```
 
@@ -26,3 +26,11 @@ The `.gitignore` is updated to not commit the data but it can change if we decid
 ## Dependency Management
 However, we only use pip for dependency management.
 All the dependencies for the package must be added to the `requirements.txt`
+
+
+## Run
+```bash
+python run_model.py --dev data/eng.erst.gum/eng.erst.gum_dev.rels \
+ --train data/eng.erst.gum/eng.erst.gum_train.rels \
+  --model_name google-bert/bert-base-multilingual-cased 
+```

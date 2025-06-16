@@ -1,11 +1,24 @@
 import argparse
 import io
+import json
+
 from torch import nn
 from torch.utils.data import DataLoader
 from transformers import AutoModel, Trainer, AutoTokenizer, DataCollatorWithPadding, AutoModelForSequenceClassification, \
     TrainingArguments
 from pathlib import Path
+from pprint import pprint
 from datasets import Dataset, load_dataset, DatasetDict
+
+
+def get_disrpt_labels():
+    """ Returns a dictionary of labels for the DISRPT task by retrieiving it from mapping_disrpt.json file."""
+    mapping_file = "mapping_disrpt25.json"
+    if not Path(mapping_file).exists():
+        raise FileNotFoundError(f"Mapping file {mapping_file} not found. Please download it from the DISRPT repository.")
+    mappings = json.load(open(mapping_file, 'r', encoding='utf-8'))
+    unique_labels = set(mappings.values())
+    return unique_labels
 
 # Ref : https://github.com/disrpt/sharedtask2025/blob/091404690ed4912ca55873616ddcaa7f26849308/utils/disrpt_eval_2024.py#L246
 def load_rels_dataset(dev_filepath, train_filepath):
@@ -66,11 +79,17 @@ class TransformerClassifier(nn.Module):
 def train(model_name, dev_dataset, train_dataset):
     """The function uses huggingface to train model with dataset"""
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    dev_labels = dev_dataset['label']
-    train_labels = train_dataset['label']
-    assert set(dev_labels) == set(train_labels), "Labels in dev and train datasets do not match"
-    label2id = {label: i for i, label in enumerate(sorted(dev_labels))}
+    dev_labels = set(dev_dataset['label'])
+    train_labels = set(train_dataset['label'])
+    disrpt_labels = get_disrpt_labels()
+    print("Unique labels in dev dataset:", dev_labels)
+    print("Unique labels in train dataset:", train_labels)
+    assert dev_labels.union(train_labels).issubset(disrpt_labels), "Labels in dev or train dataset are not in the unique labels set."
+
+    label2id = {label: i for i, label in enumerate(sorted(disrpt_labels))}
     id2label = {i: label for label, i in label2id.items()}
+    print("Num of labels:", len(label2id))
+
     # Tokenize the dataset for the model
     dev_dataset = dev_dataset.map(
         lambda x: tokenizer(x['text'], padding='max_length', truncation=True, max_length=512),
