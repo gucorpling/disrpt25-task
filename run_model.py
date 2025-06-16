@@ -4,12 +4,13 @@ import json
 
 from torch import nn
 from torch.utils.data import DataLoader
-from transformers import AutoModel, Trainer, AutoTokenizer, DataCollatorWithPadding, AutoModelForSequenceClassification, \
-    TrainingArguments
 from pathlib import Path
 from pprint import pprint
-from datasets import Dataset, load_dataset, DatasetDict
 
+from transformers import AutoModel, Trainer, AutoTokenizer, DataCollatorWithPadding, AutoModelForSequenceClassification, \
+    TrainingArguments
+from datasets import Dataset, load_dataset, DatasetDict
+import evaluate
 
 def get_disrpt_labels():
     """ Returns a dictionary of labels for the DISRPT task by retrieiving it from mapping_disrpt.json file."""
@@ -22,7 +23,14 @@ def get_disrpt_labels():
 
 # Ref : https://github.com/disrpt/sharedtask2025/blob/091404690ed4912ca55873616ddcaa7f26849308/utils/disrpt_eval_2024.py#L246
 def load_rels_dataset(dev_filepath, train_filepath):
+    # TODO add three identification from the dataset name that can be used
+    # TODO Language Token
+    # TODO Dataset Token
+    # TODO Task Token
+    # TODO Direction Token to the input
+    # TODO text backround
     # not compatible with a the pandas based \t reader try with explicit code
+    #
     # return load_dataset('csv', data_files={'dev': dev_filepath, 'train': train_filepath}, delimiter='\t')
     def get_dataset(filepath):
         data = io.open(filepath, encoding="utf-8").read().strip().replace("\r", "")
@@ -78,6 +86,22 @@ class TransformerClassifier(nn.Module):
 
 def train(model_name, dev_dataset, train_dataset):
     """The function uses huggingface to train model with dataset"""
+
+    def compute_metrics(eval_pred):
+        accuracy = evaluate.load("accuracy")
+        precision = evaluate.load("precision")
+        recall = evaluate.load("recall")
+        f1 = evaluate.load("f1")
+
+        predictions, labels = eval_pred
+        predictions = predictions.argmax(axis=1)
+        return {
+            'accuracy': accuracy.compute(predictions=predictions, references=labels),
+            'precision': precision.compute(predictions=predictions, references=labels, average='weighted'),
+            'recall': recall.compute(predictions=predictions, references=labels, average='weighted'),
+            'f1': f1.compute(predictions=predictions, references=labels, average='weighted')
+        }
+
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     dev_labels = set(dev_dataset['label'])
     train_labels = set(train_dataset['label'])
@@ -104,6 +128,10 @@ def train(model_name, dev_dataset, train_dataset):
     # Encode labels as integers
     dev_dataset = dev_dataset.map(lambda x: {'label': label2id[x['label']]}, remove_columns=['label'])
     train_dataset = train_dataset.map(lambda x: {'label': label2id[x['label']]}, remove_columns=['label'])
+    # # Try with smaller set
+    # dev_dataset = dev_dataset.shuffle(seed=42).select(range(64))
+    # train_dataset = train_dataset.shuffle(seed=42).select(range(64))
+
     collator = DataCollatorWithPadding(tokenizer=tokenizer, padding=True, max_length=512)
     model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=17, label2id=label2id, id2label=id2label)
     training_args = TrainingArguments(
@@ -119,8 +147,11 @@ def train(model_name, dev_dataset, train_dataset):
         train_dataset=train_dataset,
         eval_dataset=dev_dataset,
         data_collator=collator,
+        compute_metrics=compute_metrics,
     )
     trainer.train()
+    results = trainer.evaluate(dev_dataset)
+    print(results)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
