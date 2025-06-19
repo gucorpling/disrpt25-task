@@ -1,15 +1,13 @@
 import argparse
-import io
 import json
 
 from torch import nn
-from torch.utils.data import DataLoader
 from pathlib import Path
-from pprint import pprint
 
 from transformers import AutoModel, Trainer, AutoTokenizer, DataCollatorWithPadding, AutoModelForSequenceClassification, \
     TrainingArguments
 from datasets import Dataset, load_dataset, DatasetDict
+from disrptdata import load_training_dataset
 import evaluate
 
 def get_disrpt_labels():
@@ -20,53 +18,6 @@ def get_disrpt_labels():
     mappings = json.load(open(mapping_file, 'r', encoding='utf-8'))
     unique_labels = set(mappings.values())
     return unique_labels
-
-# Ref : https://github.com/disrpt/sharedtask2025/blob/091404690ed4912ca55873616ddcaa7f26849308/utils/disrpt_eval_2024.py#L246
-def load_rels_dataset(dev_filepath, train_filepath):
-    # TODO add three identification from the dataset name that can be used
-    # TODO Language Token
-    # TODO Dataset Token
-    # TODO Task Token
-    # TODO Direction Token to the input
-    # TODO text backround
-    # not compatible with a the pandas based \t reader try with explicit code
-    #
-    # return load_dataset('csv', data_files={'dev': dev_filepath, 'train': train_filepath}, delimiter='\t')
-    def get_dataset(filepath):
-        data = io.open(filepath, encoding="utf-8").read().strip().replace("\r", "")
-        lines = data.split("\n")
-        header = lines[0]
-        split_lines = [line.split("\t") for line in lines[1:]]
-        LABEL_ID = -1
-        TYPE_ID = -3
-        U1_ID = 5
-        U2_ID = 6
-        DIRECTION_ID = -4
-
-        labels = [line[LABEL_ID] for line in split_lines]
-        u1s = [line[U1_ID] for line in split_lines]
-        u2s = [line[U2_ID] for line in split_lines]
-        directions = [line[DIRECTION_ID] for line in split_lines]
-        types = [line[TYPE_ID] for line in split_lines]
-
-        return Dataset.from_dict({
-            "label": labels,
-            "type": types,
-            "u1": u1s,
-            "u2": u2s,
-            "text": [f"{u1} {u2}" for u1, u2 in zip(u1s, u2s)],
-            "direction": directions,
-        })
-
-
-    dev_rels = get_dataset(dev_filepath)
-    train_rels = get_dataset(train_filepath)
-    print(dev_rels[0])
-    print(train_rels[0])
-    dataset = DatasetDict()
-    dataset['dev'] = dev_rels
-    dataset['train'] = train_rels
-    return dataset
 
 # Fix doesn't work yet
 # TODO pab make it a pipeline
@@ -160,7 +111,7 @@ if __name__ == "__main__":
     parser.add_argument("--test", type=str, required=False)
     parser.add_argument("--model_name", type=str, required=True,)
     args = parser.parse_args()
-    dataset = load_rels_dataset(args.dev, args.train)
+    dataset = load_training_dataset(args.dev, args.train)
     train(model_name=args.model_name, dev_dataset=dataset['dev'], train_dataset=dataset['train'])
     print(dataset)
 
