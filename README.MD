@@ -17,11 +17,10 @@ python -m pip install -r requirements.txt
 
 ## Preparing Data
 Clone the shared task public repo (or add temporarily as submodule)
-Change the CLI directory to the shared task repo `sharedtask2025/util` and run the process underscore.py
+Change the CLI directory to the shared task repo `sharedtask2025/util` and run `python process_underscore.py`
 Once the process is complete copy the data to `/data`
 
 The `.gitignore` is updated to not commit the data but it can change if we decide to change that
-
 
 ## Dependency Management
 However, we only use pip for dependency management.
