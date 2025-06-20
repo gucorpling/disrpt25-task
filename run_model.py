@@ -7,7 +7,7 @@ from pathlib import Path
 from transformers import AutoModel, Trainer, AutoTokenizer, DataCollatorWithPadding, AutoModelForSequenceClassification, \
     TrainingArguments
 from datasets import Dataset, load_dataset, DatasetDict
-from disrptdata import load_training_dataset
+import disrptdata
 import evaluate
 
 def get_disrpt_labels():
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     parser.add_argument("--test", type=str, required=False)
     parser.add_argument("--model_name", type=str, required=True,)
     args = parser.parse_args()
-    dataset = load_training_dataset(args.dev, args.train)
+    dataset = disrptdata.get_combined_dataset()
     train(model_name=args.model_name, dev_dataset=dataset['dev'], train_dataset=dataset['train'])
     print(dataset)
 

@@ -3,7 +3,8 @@ In this module, we define the dataset utilities for collating, tokenizing, and p
 This includes reading the DISRPT data files, collating them as needed and providing them only as huggingface (torch) datasets.
 """
 import io
-from datasets import Dataset, DatasetDict
+import datasets
+from datasets import Dataset, DatasetDict, load_dataset
 from util import get_logger
 from pathlib import Path
 
@@ -65,13 +66,29 @@ def load_training_dataset(dataset_name, context_size=-1):
     def load_split_if_it_exists(split_name):
         if Path(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}.rels").exists() is True:
             logger.info(f"Loading {split_name} dataset for {dataset_name}")
-            dev_rels = read_rels_split(f"{DATA_DIR}/{dataset_name}/{dataset_name}_dev")
-            dataset[split_name] = dev_rels
+            rels = read_rels_split(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}")
+            dataset[split_name] = rels
         else:
             logger.warning(f"No {split_name} split found for {dataset_name}.")
     load_split_if_it_exists("dev")
     load_split_if_it_exists("train")
     return dataset
+
+def get_combined_dataset():
+    """
+    Combine all datasets into a single DatasetDict.
+    """
+    combined_dataset = DatasetDict()
+    all_datasets = [load_training_dataset(dataset_name) for dataset_name in get_list_of_dataset_from_data_dir(DATA_DIR)]
+    combined_dataset["dev"] = datasets.concatenate_datasets(
+        [dataset["dev"] for dataset in all_datasets if "dev" in dataset]
+    )
+    combined_dataset["train"] = datasets.concatenate_datasets(
+        [dataset["train"] for dataset in all_datasets if "train" in dataset]
+    )
+    return combined_dataset
+
+
 
 if __name__ == "__main__":
     # Sanity check for the dataset loading
@@ -80,3 +97,4 @@ if __name__ == "__main__":
         logger.info(f"Loading dataset: {dataset_name}")
         dataset = load_training_dataset(dataset_name)
         logger.info(dataset)
+    logger.info(f"Combined Dataset: {get_combined_dataset()}")
