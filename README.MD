@@ -29,7 +29,6 @@ All the dependencies for the package must be added to the `requirements.txt`
 
 ## Run
 ```bash
-python run_model.py --dev data/eng.erst.gum/eng.erst.gum_dev.rels \
- --train data/eng.erst.gum/eng.erst.gum_train.rels \
+python run_model.py --dataset_name deu.rst.pcc \
   --model_name google-bert/bert-base-multilingual-cased 
 ```
