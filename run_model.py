@@ -5,11 +5,14 @@ from torch import nn
 from pathlib import Path
 
 from transformers import AutoModel, Trainer, AutoTokenizer, DataCollatorWithPadding, AutoModelForSequenceClassification, \
-    TrainingArguments
+    TrainingArguments, set_seed
 from datasets import Dataset, load_dataset, DatasetDict
-import disrptdata
 import evaluate
 
+import disrptdata
+import util
+
+logger = util.get_logger(__name__)
 def get_disrpt_labels():
     """ Returns a dictionary of labels for the DISRPT task by retrieiving it from mapping_disrpt.json file."""
     mapping_file = "mapping_disrpt25.json"
@@ -86,7 +89,7 @@ def train(model_name, dev_dataset, train_dataset):
     collator = DataCollatorWithPadding(tokenizer=tokenizer, padding=True, max_length=512)
     model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=17, label2id=label2id, id2label=id2label)
     training_args = TrainingArguments(
-        output_dir="./results",
+        output_dir=f"./results/{model_name}-{seed}",
         learning_rate=2e-5,
         per_device_train_batch_size=16,
         per_device_eval_batch_size=16,
@@ -102,17 +105,38 @@ def train(model_name, dev_dataset, train_dataset):
     )
     trainer.train()
     results = trainer.evaluate(dev_dataset)
-    print(results)
+    return results
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dev", type=str, required=True)
-    parser.add_argument("--train", type=str, required=True)
-    parser.add_argument("--test", type=str, required=False)
+    parser.add_argument("--dataset_name", type=str, action='store', default='combined',)
     parser.add_argument("--model_name", type=str, required=True,)
     args = parser.parse_args()
-    dataset = disrptdata.get_combined_dataset()
-    train(model_name=args.model_name, dev_dataset=dataset['dev'], train_dataset=dataset['train'])
+    # TODO support seed as a CLI parameter
+    seed = 42
+    set_seed(seed)
+
+    match args.dataset_name:
+        case 'combined':
+            dataset = disrptdata.get_combined_dataset()
+
+        case dataset_name:
+            # if dataset_name not in disrptdata.get_list_of_dataset_from_data_dir(disrptdata.DATA_DIR):
+            #     logger.error(f"Dataset {dataset_name} not found in {disrptdata.DATA_DIR}.")
+            #     raise ValueError(f"Dataset {dataset_name} not found in {disrptdata.DATA_DIR}.")
+            # else:
+            lang, framework, corpus = disrptdata.get_meta_features_for_dataset(dataset_name)
+            logger.info(f"Loading dataset: {dataset_name}")
+            logger.info(f"Language: {lang}, Framework: {framework}, Dataset: {corpus}")
+            dataset = disrptdata.load_training_dataset(dataset_name, lang, framework, corpus)
+
     print(dataset)
+    results = train(model_name=args.model_name, dev_dataset=dataset['dev'], train_dataset=dataset['train'])
+    print(f"Results for model {args.model_name}: {results}")
+    # Save the results to a file as JSON
+    output_file = f"./results/{args.model_name}/results.json"
+    Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+    with open(output_file, 'w') as f:
+        json.dump(results, f, indent=4)
 
 

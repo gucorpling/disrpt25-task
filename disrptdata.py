@@ -3,10 +3,12 @@ In this module, we define the dataset utilities for collating, tokenizing, and p
 This includes reading the DISRPT data files, collating them as needed and providing them only as huggingface (torch) datasets.
 """
 import io
+from pathlib import Path
 import datasets
 from datasets import Dataset, DatasetDict, load_dataset
+import conllu
+
 from util import get_logger
-from pathlib import Path
 
 DATA_DIR = "data"
 
@@ -22,10 +24,27 @@ def get_list_of_dataset_from_data_dir(data_dir):
     print("Found the following datasets in the data directory:")
     return datasets
 
-def get_dataset(language, framework, dataset_key):
-    return load_training_dataset(f"{language}.{framework}.{dataset_key}")
+def get_dataset(dataset_name):
+    language, framework, corpus = get_meta_features_for_dataset(dataset_name)
+    return load_training_dataset(dataset_name, language, framework, corpus)
 
-def read_rels_split(split_prefix, lang, framework, corpus, context_size=-1):
+# Read the .conllu files and convert them to a dataset
+def read_conll_split(split_prefix):
+    # Ref : ABCD
+    conll_file = split_prefix + ".conllu"
+    if not Path(conll_file).exists():
+        raise FileNotFoundError(f"Conll file {conll_file} does not exist.")
+
+    with open(conll_file, encoding="utf-8") as f:
+        text = f.read()
+        conllu_sentences = conllu.parse(text)
+    return conllu_sentences
+
+# Ref:https://github.com/disrpt/sharedtask2025/blob/067f98775348b68e530d15638ee8cd00036ae9a9/utils/disrpt_eval_2024.py#L444
+def read_tok_split(split_prefix):
+    pass
+
+def read_rels_split(split_prefix, lang, framework, corpus):
     # Ref : https://github.com/disrpt/sharedtask2025/blob/091404690ed4912ca55873616ddcaa7f26849308/utils/disrpt_eval_2024.py#L246
     data = io.open(split_prefix + ".rels", encoding="utf-8").read().strip().replace("\r", "")
     lines = data.split("\n")
@@ -36,12 +55,6 @@ def read_rels_split(split_prefix, lang, framework, corpus, context_size=-1):
     U1_ID = 5
     U2_ID = 6
     DIRECTION_ID = -4
-    match context_size:
-        case -1:  # No context
-            pass
-        # If context size is specified, we can load it
-        case x if isinstance(x, int) and x > 0:
-            raise NotImplementedError("Context size support is not implemented yet.")
 
     labels = [line[LABEL_ID] for line in split_lines]
     u1s = [line[U1_ID] for line in split_lines]
@@ -72,16 +85,22 @@ def load_training_dataset(dataset_name, lang, framework, corpus, context_size=-1
     # not compatible with a the pandas based \t reader try with explicit code
     # return load_dataset('csv', data_files={'dev': dev_filepath, 'train': train_filepath}, delimiter='\t')
     dataset = DatasetDict()
-    def load_split_if_it_exists(split_name):
+    def load_split_if_it_exists(split_name, context_size=-1):
         if Path(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}.rels").exists() is True:
             logger.info(f"Loading {split_name} dataset for {dataset_name}")
-            rels = read_rels_split(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}",
-                                   lang, framework, corpus, context_size)
+            rels = read_rels_split(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}", lang, framework, corpus)
             dataset[split_name] = rels
         else:
             logger.warning(f"No {split_name} split found for {dataset_name}.")
     load_split_if_it_exists("dev")
     load_split_if_it_exists("train")
+
+    # Augment the dataset with meta features
+    if "dev" in dataset:
+        pass
+
+    if "train" in dataset:
+        pass
     return dataset
 
 def get_combined_dataset():
@@ -104,10 +123,8 @@ if __name__ == "__main__":
     # Sanity check for the dataset loading
     logger.info(get_list_of_dataset_from_data_dir("data"))
     for dataset_name in get_list_of_dataset_from_data_dir("data"):
-        lang, framework, corpus = get_meta_features_for_dataset(dataset_name)
         logger.info(f"Loading dataset: {dataset_name}")
-        logger.info(f"Language: {lang}, Framework: {framework}, Dataset: {corpus}")
-        dataset = load_training_dataset(dataset_name, lang, framework, corpus)
+        dataset = get_dataset(dataset_name)
         logger.info(dataset)
 
     combined_dataset = get_combined_dataset()
