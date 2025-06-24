@@ -21,12 +21,12 @@ def get_meta_features_for_dataset(dataset_name):
 
 def get_list_of_dataset_from_data_dir(data_dir):
     datasets = [child.name for child in Path(data_dir).iterdir()]
-    print("Found the following datasets in the data directory:")
+    logger.info("Found the following datasets in the data directory:")
     return datasets
 
-def get_dataset(dataset_name):
+def get_dataset(dataset_name, context_size=-1):
     language, framework, corpus = get_meta_features_for_dataset(dataset_name)
-    return load_training_dataset(dataset_name, language, framework, corpus)
+    return load_training_dataset(dataset_name, language, framework, corpus, context_size=context_size)
 
 # Read the .conllu files and convert them to a dataset
 def read_conll_split(split_prefix):
@@ -35,14 +35,92 @@ def read_conll_split(split_prefix):
     if not Path(conll_file).exists():
         raise FileNotFoundError(f"Conll file {conll_file} does not exist.")
 
-    with open(conll_file, encoding="utf-8") as f:
+def read_conll_sentences_split(filepath):
+    # Ref : ABCD
+    if not Path(filepath).exists():
+        raise FileNotFoundError(f"Conll file {filepath} does not exist.")
+
+    with open(filepath, encoding="utf-8") as f:
         text = f.read()
         conllu_sentences = conllu.parse(text)
     return conllu_sentences
 
-# Ref:https://github.com/disrpt/sharedtask2025/blob/067f98775348b68e530d15638ee8cd00036ae9a9/utils/disrpt_eval_2024.py#L444
-def read_tok_split(split_prefix):
-    pass
+# Organize the conllu sentences into a index with dictionary using doc_id from the metadata as key
+def get_conllu_sentences_by_docs(split_prefix):
+    """
+    Organizes conllu sentences into a dictionary indexed by doc_id.
+    Each entry in the dictionary contains the sentences for that doc_id.
+    """
+    # Read the .conllu/tok files and convert them to a dataset
+    filepath = split_prefix + ".conllu"
+    conllu_sentences = read_conll_sentences_split(filepath)
+    organized_sentences = {}
+    doc_id = None  # Initialize doc_id to None
+    for sentence in conllu_sentences:
+        if 'newdoc id' in sentence.metadata:
+            doc_id = sentence.metadata['newdoc id']
+            assert doc_id not in organized_sentences, f"Duplicate doc_id found: {doc_id}"
+            organized_sentences[doc_id] = []
+        sent_id = sentence.metadata['sent_id']
+        assert doc_id is not None, f"Doc_id should be set before adding sentences. At sent_id {sent_id} without doc_id"
+        organized_sentences[doc_id].append(sentence)
+    return organized_sentences
+
+# Read the .tok files and organize them by doc
+def get_spans_and_toks_for_docs(split_prefix, spans=False):
+    """
+    Reads the .tok files and organizes them into a dictionary indexed by doc_id.
+    Each entry in the dictionary contains the sentences for that doc_id.
+    """
+    # Read the .conllu/tok files and convert them to a dataset
+    filepath = split_prefix + ".tok"
+    docs = read_conll_sentences_split(filepath)
+    # Use the BIO encodings to organize the spans by the sentences
+    # Convert doc to two sequences of tokens and BIO tags
+    spans_for_docs = dict()
+    def bio_tag(token):
+        # Neglect MWTs
+        # Should be only because it is a dot token
+        # TODO move this decision logic to be at dataset level based on dataset config
+        if token['misc'] is None:
+            return None
+        elif 'Conn' in token['misc']:
+            return token['misc']['Conn']
+        elif 'Seg' in token['misc']:
+            return token['misc']['Seg']
+
+    if spans is True:
+        for doc in docs:
+            spans = []
+            span = list()
+            for token in doc:
+                try:
+                    tag = bio_tag(token)
+                except Exception as e:
+                    logger.error(f"Error processing token {token} in doc {doc.metadata['newdoc id']}: {e}")
+                    logger.error(f"Token keys: {token.keys()}")
+                    for key in token.keys():
+                        logger.error(f"Token {key}: {token[key]}")
+                    raise e
+                match tag:
+                    case None:
+                        # Skip MWTs
+                        continue
+
+                    case 'B-seg':
+                        spans.append(span)
+                        span = [token['form']]
+
+                    case 'O':
+                        span.append(token['form'])
+
+            logger.info(f"Doc {doc.metadata['newdoc id']} has {len(spans)} spans")
+            spans_for_docs[doc.metadata['newdoc id']] = spans
+
+    toks_for_docs = {
+        doc.metadata['newdoc id']: [token['form'] for token in doc] for doc in docs
+    }
+    return spans_for_docs, toks_for_docs
 
 def read_rels_split(split_prefix, lang, framework, corpus):
     # Ref : https://github.com/disrpt/sharedtask2025/blob/091404690ed4912ca55873616ddcaa7f26849308/utils/disrpt_eval_2024.py#L246
@@ -51,14 +129,19 @@ def read_rels_split(split_prefix, lang, framework, corpus):
     header = lines[0]
     split_lines = [line.split("\t") for line in lines[1:]]
     LABEL_ID = -1
+    UNIT_1_TOKS = 2
+    UNIT_2_TOKS = 3
     TYPE_ID = -3
     U1_ID = 5
     U2_ID = 6
     DIRECTION_ID = -4
 
     labels = [line[LABEL_ID] for line in split_lines]
+    doc_ids = [line[0] for line in split_lines]
     u1s = [line[U1_ID] for line in split_lines]
+    u1_toks = [line[UNIT_1_TOKS].split("-") for line in split_lines]
     u2s = [line[U2_ID] for line in split_lines]
+    u2_toks = [line[UNIT_2_TOKS].split("-") for line in split_lines]
     directions = [line[DIRECTION_ID] for line in split_lines]
     types = [line[TYPE_ID] for line in split_lines]
     logger.info(f"Loading {split_prefix} with features {lang} {framework} {corpus} ")
@@ -68,8 +151,11 @@ def read_rels_split(split_prefix, lang, framework, corpus):
         "corpus": [corpus] * len(labels),
         "label": labels,
         "type": types,
+        "doc_id": doc_ids,
         "u1": u1s,
+        "u1_toks": u1_toks,
         "u2": u2s,
+        "u2_toks": u2_toks,
         "text": [f"{u1} {u2}" for u1, u2 in zip(u1s, u2s)],
         "direction": directions,
     })
@@ -77,10 +163,6 @@ def read_rels_split(split_prefix, lang, framework, corpus):
 # Load Dev and Train Datasets if they are present
 def load_training_dataset(dataset_name, lang, framework, corpus, context_size=-1):
     # TODO add three identification from the dataset name that can be used
-    # TODO Language Token
-    # TODO Dataset Token
-    # TODO Task Token
-    # TODO Direction Token to the input
     # TODO text context
     # not compatible with a the pandas based \t reader try with explicit code
     # return load_dataset('csv', data_files={'dev': dev_filepath, 'train': train_filepath}, delimiter='\t')
@@ -89,6 +171,12 @@ def load_training_dataset(dataset_name, lang, framework, corpus, context_size=-1
         if Path(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}.rels").exists() is True:
             logger.info(f"Loading {split_name} dataset for {dataset_name}")
             rels = read_rels_split(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}", lang, framework, corpus)
+            _, tokens = get_spans_and_toks_for_docs(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}")
+            rels = rels.map(
+                lambda x: {
+                    "doc_tokens": tokens[x["doc_id"]],
+                }
+            )
             dataset[split_name] = rels
         else:
             logger.warning(f"No {split_name} split found for {dataset_name}.")
