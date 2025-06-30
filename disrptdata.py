@@ -2,6 +2,7 @@
 In this module, we define the dataset utilities for collating, tokenizing, and preparing the datasets.
 This includes reading the DISRPT data files, collating them as needed and providing them only as huggingface (torch) datasets.
 """
+import argparse
 import io
 from pathlib import Path
 import datasets
@@ -67,7 +68,7 @@ def get_conllu_sentences_by_docs(split_prefix):
     return organized_sentences
 
 # Read the .tok files and organize them by doc
-def get_spans_and_toks_for_docs(split_prefix, spans=False):
+def get_segs_and_toks_for_docs(split_prefix, with_segs=False):
     """
     Reads the .tok files and organizes them into a dictionary indexed by doc_id.
     Each entry in the dictionary contains the sentences for that doc_id.
@@ -75,52 +76,72 @@ def get_spans_and_toks_for_docs(split_prefix, spans=False):
     # Read the .conllu/tok files and convert them to a dataset
     filepath = split_prefix + ".tok"
     docs = read_conll_sentences_split(filepath)
-    # Use the BIO encodings to organize the spans by the sentences
-    # Convert doc to two sequences of tokens and BIO tags
-    spans_for_docs = dict()
+
     def bio_tag(token):
         # Neglect MWTs
+        # Neglect connective tags
         # Should be only because it is a dot token
         # TODO move this decision logic to be at dataset level based on dataset config
-        if token['misc'] is None:
+
+        if 'misc' not in token:
+            return None
+        elif token['misc'] is None or len(token['misc']) == 0:
             return None
         elif 'Conn' in token['misc']:
             return token['misc']['Conn']
         elif 'Seg' in token['misc']:
             return token['misc']['Seg']
 
-    if spans is True:
+    # Use the BIO encodings to organize the spans by the sentences
+    # Convert doc to two sequences of tokens and BIO tags
+
+    segs_for_docs = dict()
+
+    if with_segs is True:
         for doc in docs:
-            spans = []
-            span = list()
+            segs = []
+            span = None
             for token in doc:
                 try:
                     tag = bio_tag(token)
+
+                    match tag:
+                        case None:
+                            # Skip MWTs
+                            continue
+
+                        case 'B-seg' | 'B-Conn':
+                            if span is not None:
+                                segs.append(span)
+                            span = [token['form']]
+
+                        case 'O':
+                            # tur.pdtb.tdb may not have 0 tags before B
+                            if span is None:
+                                span = list()
+                            span.append(token['form'])
+
                 except Exception as e:
                     logger.error(f"Error processing token {token} in doc {doc.metadata['newdoc id']}: {e}")
                     logger.error(f"Token keys: {token.keys()}")
                     for key in token.keys():
                         logger.error(f"Token {key}: {token[key]}")
                     raise e
-                match tag:
-                    case None:
-                        # Skip MWTs
-                        continue
+            else:
+                # Final segment without a new B tag
+                if span is not None:
+                    segs.append(span)
 
-                    case 'B-seg':
-                        spans.append(span)
-                        span = [token['form']]
-
-                    case 'O':
-                        span.append(token['form'])
-
-            logger.info(f"Doc {doc.metadata['newdoc id']} has {len(spans)} spans")
-            spans_for_docs[doc.metadata['newdoc id']] = spans
+            logger.info(f"Doc {doc.metadata['newdoc id']} has {len(segs)} spans")
+            segs_for_docs[doc.metadata['newdoc id']] = segs
 
     toks_for_docs = {
         doc.metadata['newdoc id']: [token['form'] for token in doc] for doc in docs
     }
-    return spans_for_docs, toks_for_docs
+    total_spans = sum(len(doc_segs) for doc_segs in segs_for_docs.values())
+    total_tokens = sum(len(tokens) for tokens in toks_for_docs.values())
+    logger.info(f"Loaded {len(docs)} documents with {total_tokens} tokens and {total_spans} segments for {split_prefix}.")
+    return segs_for_docs, toks_for_docs
 
 def read_rels_split(split_prefix, lang, framework, corpus):
     # Ref : https://github.com/disrpt/sharedtask2025/blob/091404690ed4912ca55873616ddcaa7f26849308/utils/disrpt_eval_2024.py#L246
@@ -171,15 +192,17 @@ def load_training_dataset(dataset_name, lang, framework, corpus, context_size=-1
         if Path(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}.rels").exists() is True:
             logger.info(f"Loading {split_name} dataset for {dataset_name}")
             rels = read_rels_split(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}", lang, framework, corpus)
-            _, tokens = get_spans_and_toks_for_docs(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}")
+            spans, tokens = get_segs_and_toks_for_docs(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}", with_segs=True)
             rels = rels.map(
                 lambda x: {
                     "doc_tokens": tokens[x["doc_id"]],
                 }
             )
+
             dataset[split_name] = rels
         else:
             logger.warning(f"No {split_name} split found for {dataset_name}.")
+
     load_split_if_it_exists("dev")
     load_split_if_it_exists("train")
 
@@ -208,17 +231,29 @@ def get_combined_dataset():
 
 
 if __name__ == "__main__":
-    # Sanity check for the dataset loading
-    logger.info(get_list_of_dataset_from_data_dir("data"))
-    for dataset_name in get_list_of_dataset_from_data_dir("data"):
-        logger.info(f"Loading dataset: {dataset_name}")
-        dataset = get_dataset(dataset_name)
-        logger.info(dataset)
+    arg_parser = argparse.ArgumentParser(description="DISRPT Data Loader")
+    arg_parser.add_argument("--dataset_name", type=str, default="combined", help="Name of the dataset to load. Use 'combined' to load all datasets.")
 
-    combined_dataset = get_combined_dataset()
-    logger.info(f"Combined Dataset: {combined_dataset}")
-    # Sample 5 items from the combined dataset
-    logger.info(f"Sampling from combined dataset")
-    for item in combined_dataset['dev'].shuffle(seed=42).select(range(5)):
-        logger.info(item)
+    args = arg_parser.parse_args()
+    match args.dataset_name:
+        case "combined":
+
+            # Sanity check for the dataset loading
+            logger.info(get_list_of_dataset_from_data_dir("data"))
+            for dataset_name in get_list_of_dataset_from_data_dir("data"):
+                logger.info(f"Loading dataset: {dataset_name}")
+                dataset = get_dataset(dataset_name)
+                logger.info(dataset)
+
+            combined_dataset = get_combined_dataset()
+            logger.info(f"Combined Dataset: {combined_dataset}")
+            # Sample 5 items from the combined dataset
+            logger.info(f"Sampling from combined dataset")
+            for item in combined_dataset['dev'].shuffle(seed=42).select(range(5)):
+                logger.info(item)
+
+        case dataset_name:
+            logger.info(f"Loading dataset: {dataset_name}")
+            dataset = get_dataset(dataset_name)
+
 
