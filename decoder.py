@@ -138,9 +138,6 @@ def predict(messages, model, tokenizer):
 
     return "Unknown"
 
-from collections import defaultdict
-from transformers import AutoTokenizer, AutoModelForCausalLM
-
 def eval():
     tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-1.7B", use_fast=False, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-1.7B", device_map="auto", torch_dtype="auto")
