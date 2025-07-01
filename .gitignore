@@ -198,3 +198,4 @@ data/
 output/
 embeddings/
 wandb/
+intermediate/
