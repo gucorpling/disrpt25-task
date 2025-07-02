@@ -8,7 +8,9 @@ from pathlib import Path
 import datasets
 from datasets import Dataset, DatasetDict, load_dataset
 import conllu
+from mpmath.matrices.matrices import rowsep
 
+import features
 from util import get_logger
 
 DATA_DIR = "data"
@@ -75,7 +77,7 @@ def get_segs_and_toks_for_docs_from_conllu(split_prefix):
         for sentence in data[fn]:
             sent = []
             for token in sentence:
-                if '-' not in str(token['id']): 
+                if '-' not in str(token['id']):
                     sent.append(token['form'])
                     toks_for_docs[fn].append(token['form'])
             sents_for_docs[fn].append(sent)
@@ -183,16 +185,21 @@ def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context
     # Ref : https://github.com/disrpt/sharedtask2025/blob/091404690ed4912ca55873616ddcaa7f26849308/utils/disrpt_eval_2024.py#L246
     data = io.open(split_prefix + ".rels", encoding="utf-8").read().strip().replace("\r", "")
     lines = data.split("\n")
+    # TODO optimize collation?
     header = lines[0]
     split_lines = [line.split("\t") for line in lines[1:]]
+    # TODO make the headers enum with indices so you can just use the name
+    DIRECTION_ID = -4
+    TYPE_ID = -3
     LABEL_ID = -1
     UNIT_1_TOKS = 2
     UNIT_2_TOKS = 3
-    TYPE_ID = -3
     U1_ID = 5
     U2_ID = 6
     S1_TOKS = 7
     S2_TOKS = 8
+    S1_SENT_ID = 9
+    S2_SENT_ID = 10
     DIRECTION_ID = -4
 
     labels = [line[LABEL_ID] for line in split_lines]
@@ -201,6 +208,8 @@ def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context
     u1_toks = [line[UNIT_1_TOKS].split("-") for line in split_lines]
     u2s = [line[U2_ID] for line in split_lines]
     u2_toks = [line[UNIT_2_TOKS].split("-") for line in split_lines]
+    u1_sents = [line[S1_SENT_ID] for line in split_lines]
+    u2_sents = [line[S2_SENT_ID] for line in split_lines]
     directions = [line[DIRECTION_ID] for line in split_lines]
     types = [line[TYPE_ID] for line in split_lines]
     s1_toks = [line[S1_TOKS] for line in split_lines]
@@ -217,11 +226,11 @@ def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context
         # eng.pdtb.tedm talk_1927_en line 52 614-623,624-715
         if "," in s_toks:
             ranges = s_toks.split(",")
-            s_start, s_end = None, None 
+            s_start, s_end = None, None
 
             for r in ranges:
                 s, e = map(int, r.split('-'))
-        
+
                 if s_start is None or s < s_start:
                     s_start = s
                 if s_end is None or e > s_end:
@@ -238,14 +247,14 @@ def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context
         else:
             # example: eng.rst.rstdt_dev wsj_0629 (942, 1042)
             sentence_range = []
-    
+
             for (start, end), sentence_number in lr2idx.items():
                 if not (int(s_end) < start or int(s_start) > end):
                     sentence_range.append(sentence_number)
 
             s = ' '.join(' '.join(toks_for_docs[s_start-1:s_end]) for s_r in sentence_range for s_start, s_end in [idx2lr[s_r]])
             idx = sentence_range[0] if s1ors2 == 1 else sentence_range[-1]
-        
+
         context_idx = idx
         context = []
         while abs(idx - context_idx) < context_sent or sum(len(sublist) for sublist in context) < context_tok:
@@ -269,7 +278,7 @@ def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context
         if s1_tok == s2_tok:
             context = [s1_context, s1, s2_context]
         else:
-            context = [s1_context, s1+s2, s2_context]    
+            context = [s1_context, s1+s2, s2_context]
         contexts.append(context)
 
     return Dataset.from_dict({
@@ -283,6 +292,8 @@ def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context
         "u1_toks": u1_toks,
         "u2": u2s,
         "u2_toks": u2_toks,
+        "u1_sent": u1_sents,
+        "u2_sent": u2_sents,
         "text": [f"{u1} {u2}" for u1, u2 in zip(u1s, u2s)],
         "direction": directions,
         "context": contexts
@@ -295,11 +306,23 @@ def load_training_dataset(dataset_name, lang, framework, corpus, context_sent, c
     # not compatible with a the pandas based \t reader try with explicit code
     # return load_dataset('csv', data_files={'dev': dev_filepath, 'train': train_filepath}, delimiter='\t')
     dataset = DatasetDict()
+    # Process relfiles to create a dataset with features
+    dataset_prefix = f"{DATA_DIR}/{dataset_name}/"
+
     def load_split_if_it_exists(split_name, context_sent, context_tok):
-        if Path(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}.rels").exists() is True:
-            logger.info(f"Loading {split_name} dataset for {dataset_name}")
+        rels_file = f"{dataset_prefix}{dataset_name}_{split_name}.rels"
+        if Path(rels_file).exists() is True:
+            conllu_file = f"{dataset_prefix}{dataset_name}_{split_name}.conllu"
+            # TODO reduce double reading and use the featured dataset as the prime source
             rels = read_rels_split(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}", lang, framework, corpus, context_sent, context_tok)
             # spans, tokens = get_segs_and_toks_for_docs(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}", with_segs=True)
+            # Just splicing the rows_with_features to the rels
+            rows_with_features = features.process_relfile(rels_file, conllu_file, dataset_name)
+            feat_keys = rows_with_features[0].keys()
+            rel_keys = rels.features.keys()
+            feats = feat_keys - rel_keys
+            rels = rels.map(lambda x, i:  {feat:rows_with_features[i][feat] for feat in feats} , with_indices=True)
+
             # rels = rels.map(
             #     lambda x: {
             #         "doc_tokens": tokens[x["doc_id"]],
