@@ -17,7 +17,8 @@ from transformers import (
 import wandb 
 
 
-PROMPT = "You will be given two sentences. Please identify the discourse relation between them from the following set of options: contrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction. \nPlease output only the discourse relation label you choose.\n"
+# PROMPT = "You will be given two sentences. Please identify the discourse relation between them from the following set of options: contrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction. \nPlease output only the discourse relation label you choose.\n"
+PROMPT = "You are an expert in discourse analysis. Given two sentences and their directional relationship, please identify the discourse relation between them from the following set of options: contrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction. Please output only the label of the discourse relation you choose."
 MAX_LENGTH = 32768
 MAX_RETRIES = 30
 LABELS = [
@@ -41,7 +42,9 @@ LABELS = [
 ]
 
 def preprocess_for_finetuning(example, tokenizer):
-    input = f"The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}"
+    # input = f"The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}"
+    input = f"## Sentence1:{example['u1']}\n## Sentence2:{example['u2']}\n## Direction:{example['direction']}"
+
     input_ids, attention_mask, labels = [], [], []
     instruction = tokenizer(
         f"<|im_start|>system\n{PROMPT}<|im_end|>\n<|im_start|>user\n{input}<|im_end|>\n<|im_start|>assistant\n",
@@ -81,14 +84,14 @@ def train():
     )
 
     args = TrainingArguments(
-        output_dir="./output/Qwen3-1.7B",
+        output_dir="./output/Qwen3-1.7B-refined",
         per_device_train_batch_size=4,
         per_device_eval_batch_size=4,
         gradient_accumulation_steps=16,
-        eval_strategy="steps",
-        eval_steps=50,
+        eval_strategy="epoch",
+        # eval_steps=50,
         logging_steps=10,
-        num_train_epochs=2,
+        num_train_epochs=1,
         save_strategy="epoch",
         # save_steps=300,
         learning_rate=1e-4,
@@ -139,9 +142,10 @@ def predict(messages, model, tokenizer):
     return "Unknown"
 
 def eval():
+    checkpoint_name = "Qwen3-1.7B-refined-augment/checkpoint-3658"
     tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-1.7B", use_fast=False, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-1.7B", device_map="auto", torch_dtype="auto")
-    # model = AutoModelForCausalLM.from_pretrained("output/Qwen3-1.7B/checkpoint-3159", device_map="auto", torch_dtype="auto")
+    # model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-1.7B", device_map="auto", torch_dtype="auto")
+    model = AutoModelForCausalLM.from_pretrained(f"output/{checkpoint_name}", device_map="auto", torch_dtype="auto")
 
     dataset = disrptdata.get_combined_dataset()
     eval_ds = dataset.get('dev', [])
@@ -172,14 +176,25 @@ def eval():
         group_stats['all']['correct'] += is_correct
         group_stats['all']['total'] += 1
 
-        group_stats[f'lang={lang}']['correct'] += is_correct
-        group_stats[f'lang={lang}']['total'] += 1
+        # group_stats[f'lang={lang}']['correct'] += is_correct
+        # group_stats[f'lang={lang}']['total'] += 1
 
-        group_stats[f'type={typ}']['correct'] += is_correct
-        group_stats[f'type={typ}']['total'] += 1
+        # group_stats[f'type={typ}']['correct'] += is_correct
+        # group_stats[f'type={typ}']['total'] += 1
 
         group_stats[f'lang={lang}|type={typ}|corpus={corpus}']['correct'] += is_correct
         group_stats[f'lang={lang}|type={typ}|corpus={corpus}']['total'] += 1
+
+    csv_filename = f"intermediate/{checkpoint_name.split('/')[0]}.csv"
+    with open(csv_filename, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Group', 'Accuracy (%)', 'Correct', 'Total'])  # Write header
+        
+        for group, stats in group_stats.items():
+            acc = stats['correct'] / stats['total'] * 100
+            writer.writerow([group, f"{acc:.2f}%", stats['correct'], stats['total']])
+
+    print(f"Results have been saved to {csv_filename}")
 
     print("Accuracy by group:")
     for group, stats in group_stats.items():
