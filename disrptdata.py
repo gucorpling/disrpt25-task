@@ -25,17 +25,11 @@ def get_list_of_dataset_from_data_dir(data_dir):
     logger.info("Found the following datasets in the data directory:")
     return datasets
 
-def get_dataset(dataset_name, context_size=-1):
+def get_dataset(dataset_name, context_sent, context_tok):
     language, framework, corpus = get_meta_features_for_dataset(dataset_name)
-    return load_training_dataset(dataset_name, language, framework, corpus, context_size=context_size)
+    return load_training_dataset(dataset_name, language, framework, corpus, context_sent, context_tok)
 
 # Read the .conllu files and convert them to a dataset
-def read_conll_split(split_prefix):
-    # Ref : ABCD
-    conll_file = split_prefix + ".conllu"
-    if not Path(conll_file).exists():
-        raise FileNotFoundError(f"Conll file {conll_file} does not exist.")
-
 def read_conll_sentences_split(filepath):
     # Ref : ABCD
     if not Path(filepath).exists():
@@ -58,14 +52,50 @@ def get_conllu_sentences_by_docs(split_prefix):
     organized_sentences = {}
     doc_id = None  # Initialize doc_id to None
     for sentence in conllu_sentences:
+        sent_id = 0
         if 'newdoc id' in sentence.metadata:
             doc_id = sentence.metadata['newdoc id']
             assert doc_id not in organized_sentences, f"Duplicate doc_id found: {doc_id}"
             organized_sentences[doc_id] = []
-        sent_id = sentence.metadata['sent_id']
-        assert doc_id is not None, f"Doc_id should be set before adding sentences. At sent_id {sent_id} without doc_id"
+        # sent_id = sentence.metadata['sent_id']
+        # assert doc_id is not None, f"Doc_id should be set before adding sentences. At sent_id {sent_id} without doc_id"
         organized_sentences[doc_id].append(sentence)
     return organized_sentences
+
+# Why using conllu: some tok files don't have seg information
+def get_segs_and_toks_for_docs_from_conllu(split_prefix):
+    data = get_conllu_sentences_by_docs(split_prefix)
+
+    sents_for_docs = dict()  # {'file_name': [[tok1, tok2, ...], ...]}
+    toks_for_docs = dict()
+
+    for fn in data:
+        sents_for_docs[fn] = []
+        toks_for_docs[fn] = []
+        for sentence in data[fn]:
+            sent = []
+            for token in sentence:
+                if '-' not in str(token['id']): 
+                    sent.append(token['form'])
+                    toks_for_docs[fn].append(token['form'])
+            sents_for_docs[fn].append(sent)
+
+    lr2idx = {}     # {'file_name': {(l, r): idx}}
+    idx2lr = {}     # {'file_name': {idx: (l, r)}}
+
+    for fn in sents_for_docs:
+        sentence_ls = sents_for_docs[fn]
+        cnt = 1
+        for idx, sent in enumerate(sentence_ls):
+            l = cnt
+            cnt += len(sent)
+            r = cnt - 1
+            if fn not in idx2lr:
+                idx2lr[fn], lr2idx[fn] = {}, {}
+            idx2lr[fn][idx] = (l, r)
+            lr2idx[fn][(l, r)] = idx
+
+    return lr2idx, idx2lr, toks_for_docs
 
 # Read the .tok files and organize them by doc
 def get_segs_and_toks_for_docs(split_prefix, with_segs=False):
@@ -96,9 +126,11 @@ def get_segs_and_toks_for_docs(split_prefix, with_segs=False):
     # Convert doc to two sequences of tokens and BIO tags
 
     segs_for_docs = dict()
+    toks_for_docs = dict()
 
     if with_segs is True:
         for doc in docs:
+            toks = []
             segs = []
             span = None
             for token in doc:
@@ -114,12 +146,14 @@ def get_segs_and_toks_for_docs(split_prefix, with_segs=False):
                             if span is not None:
                                 segs.append(span)
                             span = [token['form']]
+                            toks.append(token['form'])
 
                         case 'O':
                             # tur.pdtb.tdb may not have 0 tags before B
                             if span is None:
                                 span = list()
                             span.append(token['form'])
+                            toks.append(token['form'])
 
                 except Exception as e:
                     logger.error(f"Error processing token {token} in doc {doc.metadata['newdoc id']}: {e}")
@@ -134,16 +168,18 @@ def get_segs_and_toks_for_docs(split_prefix, with_segs=False):
 
             logger.info(f"Doc {doc.metadata['newdoc id']} has {len(segs)} spans")
             segs_for_docs[doc.metadata['newdoc id']] = segs
+            toks_for_docs[doc.metadata['newdoc id']] = toks
 
-    toks_for_docs = {
-        doc.metadata['newdoc id']: [token['form'] for token in doc] for doc in docs
-    }
+    # Forget to handle MWTs
+    # toks_for_docs = {
+    #     doc.metadata['newdoc id']: [token['form'] for token in doc] for doc in docs
+    # }
     total_spans = sum(len(doc_segs) for doc_segs in segs_for_docs.values())
     total_tokens = sum(len(tokens) for tokens in toks_for_docs.values())
     logger.info(f"Loaded {len(docs)} documents with {total_tokens} tokens and {total_spans} segments for {split_prefix}.")
     return segs_for_docs, toks_for_docs
 
-def read_rels_split(split_prefix, lang, framework, corpus):
+def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context_tok):
     # Ref : https://github.com/disrpt/sharedtask2025/blob/091404690ed4912ca55873616ddcaa7f26849308/utils/disrpt_eval_2024.py#L246
     data = io.open(split_prefix + ".rels", encoding="utf-8").read().strip().replace("\r", "")
     lines = data.split("\n")
@@ -155,6 +191,8 @@ def read_rels_split(split_prefix, lang, framework, corpus):
     TYPE_ID = -3
     U1_ID = 5
     U2_ID = 6
+    S1_TOKS = 7
+    S2_TOKS = 8
     DIRECTION_ID = -4
 
     labels = [line[LABEL_ID] for line in split_lines]
@@ -165,7 +203,75 @@ def read_rels_split(split_prefix, lang, framework, corpus):
     u2_toks = [line[UNIT_2_TOKS].split("-") for line in split_lines]
     directions = [line[DIRECTION_ID] for line in split_lines]
     types = [line[TYPE_ID] for line in split_lines]
+    s1_toks = [line[S1_TOKS] for line in split_lines]
+    s2_toks = [line[S2_TOKS] for line in split_lines]
+
     logger.info(f"Loading {split_prefix} with features {lang} {framework} {corpus} ")
+
+    # Context: [pre_context, full sentence s1+s2, post_context]
+    def get_context(s1ors2, doc_id, s_toks, lr2idx, idx2lr, toks_for_docs):
+        lr2idx = lr2idx[doc_id]
+        idx2lr = idx2lr[doc_id]
+        toks_for_docs = toks_for_docs[doc_id]
+
+        # eng.pdtb.tedm talk_1927_en line 52 614-623,624-715
+        if "," in s_toks:
+            ranges = s_toks.split(",")
+            s_start, s_end = None, None 
+
+            for r in ranges:
+                s, e = map(int, r.split('-'))
+        
+                if s_start is None or s < s_start:
+                    s_start = s
+                if s_end is None or e > s_end:
+                    s_end = e
+
+        elif "-" in s_toks:
+            s_start, s_end = s_toks.split("-")
+        else:
+            s_start = s_end = s_toks
+
+        if (int(s_start), int(s_end)) in lr2idx:
+            idx = lr2idx[(int(s_start), int(s_end))]
+            s = ' '.join(toks_for_docs[(int(s_start)-1):int(s_end)])
+        else:
+            # example: eng.rst.rstdt_dev wsj_0629 (942, 1042)
+            sentence_range = []
+    
+            for (start, end), sentence_number in lr2idx.items():
+                if not (int(s_end) < start or int(s_start) > end):
+                    sentence_range.append(sentence_number)
+
+            s = ' '.join(' '.join(toks_for_docs[s_start-1:s_end]) for s_r in sentence_range for s_start, s_end in [idx2lr[s_r]])
+            idx = sentence_range[0] if s1ors2 == 1 else sentence_range[-1]
+        
+        context_idx = idx
+        context = []
+        while abs(idx - context_idx) < context_sent or sum(len(sublist) for sublist in context) < context_tok:
+            context_idx = context_idx - 1 if s1ors2 == 1 else context_idx + 1
+            if context_idx not in idx2lr:
+                break
+            lr = idx2lr[context_idx]
+            context.insert(0, toks_for_docs[lr[0]-1:lr[1]]) if s1ors2 == 1 else context.append(toks_for_docs[lr[0]-1:lr[1]])
+
+        return s, " ".join(word for sublist in context for word in sublist)
+
+    lr2idx, idx2lr, toks_for_docs = get_segs_and_toks_for_docs_from_conllu(split_prefix)
+    contexts = []
+    for i in range(0, len(split_lines)):
+        doc_id = doc_ids[i]
+        s1_tok = s1_toks[i]
+        s2_tok = s2_toks[i]
+        s1, s1_context = get_context(1, doc_id, s1_tok, lr2idx, idx2lr, toks_for_docs)
+        s2, s2_context = get_context(2, doc_id, s2_tok, lr2idx, idx2lr, toks_for_docs)
+
+        if s1_tok == s2_tok:
+            context = [s1_context, s1, s2_context]
+        else:
+            context = [s1_context, s1+s2, s2_context]    
+        contexts.append(context)
+
     return Dataset.from_dict({
         "lang": [lang] * len(labels),
         "framework": [framework] * len(labels),
@@ -179,32 +285,33 @@ def read_rels_split(split_prefix, lang, framework, corpus):
         "u2_toks": u2_toks,
         "text": [f"{u1} {u2}" for u1, u2 in zip(u1s, u2s)],
         "direction": directions,
+        "context": contexts
     })
 
 # Load Dev and Train Datasets if they are present
-def load_training_dataset(dataset_name, lang, framework, corpus, context_size=-1):
+# context_sent: control the number of sentences; context_tok: control the number of tokens. Satisfy both of them
+def load_training_dataset(dataset_name, lang, framework, corpus, context_sent, context_tok):
     # TODO add three identification from the dataset name that can be used
-    # TODO text context
     # not compatible with a the pandas based \t reader try with explicit code
     # return load_dataset('csv', data_files={'dev': dev_filepath, 'train': train_filepath}, delimiter='\t')
     dataset = DatasetDict()
-    def load_split_if_it_exists(split_name, context_size=-1):
+    def load_split_if_it_exists(split_name, context_sent, context_tok):
         if Path(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}.rels").exists() is True:
             logger.info(f"Loading {split_name} dataset for {dataset_name}")
-            rels = read_rels_split(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}", lang, framework, corpus)
-            spans, tokens = get_segs_and_toks_for_docs(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}", with_segs=True)
-            rels = rels.map(
-                lambda x: {
-                    "doc_tokens": tokens[x["doc_id"]],
-                }
-            )
+            rels = read_rels_split(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}", lang, framework, corpus, context_sent, context_tok)
+            # spans, tokens = get_segs_and_toks_for_docs(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}", with_segs=True)
+            # rels = rels.map(
+            #     lambda x: {
+            #         "doc_tokens": tokens[x["doc_id"]],
+            #     }
+            # )
 
             dataset[split_name] = rels
         else:
             logger.warning(f"No {split_name} split found for {dataset_name}.")
 
-    load_split_if_it_exists("dev")
-    load_split_if_it_exists("train")
+    load_split_if_it_exists("dev", context_sent, context_tok)
+    load_split_if_it_exists("train", context_sent, context_tok)
 
     # Augment the dataset with meta features
     if "dev" in dataset:
@@ -214,12 +321,12 @@ def load_training_dataset(dataset_name, lang, framework, corpus, context_size=-1
         pass
     return dataset
 
-def get_combined_dataset():
+def get_combined_dataset(context_sent, context_tok):
     """
     Combine all datasets into a single DatasetDict.
     """
     combined_dataset = DatasetDict()
-    all_datasets = [load_training_dataset(dataset_name, *get_meta_features_for_dataset(dataset_name)) for dataset_name in get_list_of_dataset_from_data_dir(DATA_DIR)]
+    all_datasets = [load_training_dataset(dataset_name, *get_meta_features_for_dataset(dataset_name), context_sent, context_tok) for dataset_name in get_list_of_dataset_from_data_dir(DATA_DIR)]
     combined_dataset["dev"] = datasets.concatenate_datasets(
         [dataset["dev"] for dataset in all_datasets if "dev" in dataset]
     )
@@ -255,5 +362,3 @@ if __name__ == "__main__":
         case dataset_name:
             logger.info(f"Loading dataset: {dataset_name}")
             dataset = get_dataset(dataset_name)
-
-
