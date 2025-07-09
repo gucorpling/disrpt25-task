@@ -27,9 +27,9 @@ def get_list_of_dataset_from_data_dir(data_dir):
     logger.info("Found the following datasets in the data directory:")
     return datasets
 
-def get_dataset(dataset_name, context_sent, context_tok):
-    language, framework, corpus = get_meta_features_for_dataset(dataset_name)
-    return load_training_dataset(dataset_name, language, framework, corpus, context_sent, context_tok)
+def get_dataset(dataset_name, context_sent=0, context_tok=0, include_common_features=True, include_noncommon_features=True):
+    return load_training_dataset(dataset_name, context_sent, context_tok, include_common_features,
+                                 include_noncommon_features)
 
 # Read the .conllu files and convert them to a dataset
 def read_conll_sentences_split(filepath):
@@ -82,6 +82,7 @@ def get_segs_and_toks_for_docs_from_conllu(split_prefix):
                     toks_for_docs[fn].append(token['form'])
             sents_for_docs[fn].append(sent)
 
+    # Index for fast access
     lr2idx = {}     # {'file_name': {(l, r): idx}}
     idx2lr = {}     # {'file_name': {idx: (l, r)}}
 
@@ -217,6 +218,7 @@ def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context
 
     logger.info(f"Loading {split_prefix} with features {lang} {framework} {corpus} ")
 
+    # TODO This should be done outside, this function is only responsible for reading the .rels dataset
     # Context: [pre_context, full sentence s1+s2, post_context]
     def get_context(s1ors2, doc_id, s_toks, lr2idx, idx2lr, toks_for_docs):
         lr2idx = lr2idx[doc_id]
@@ -301,27 +303,40 @@ def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context
 
 # Load Dev and Train Datasets if they are present
 # context_sent: control the number of sentences; context_tok: control the number of tokens. Satisfy both of them
-def load_training_dataset(dataset_name, lang, framework, corpus, context_sent, context_tok):
+def load_training_dataset(dataset_name, sentences_for_context, tokens_for_context, include_common_features,
+                          include_noncommon_features):
     # TODO add three identification from the dataset name that can be used
     # not compatible with a the pandas based \t reader try with explicit code
     # return load_dataset('csv', data_files={'dev': dev_filepath, 'train': train_filepath}, delimiter='\t')
     dataset = DatasetDict()
     # Process relfiles to create a dataset with features
     dataset_prefix = f"{DATA_DIR}/{dataset_name}/"
+    lang, framework, corpus = get_meta_features_for_dataset(dataset_name)
 
-    def load_split_if_it_exists(split_name, context_sent, context_tok):
+    def load_split_if_it_exists(split_name):
         rels_file = f"{dataset_prefix}{dataset_name}_{split_name}.rels"
         if Path(rels_file).exists() is True:
             conllu_file = f"{dataset_prefix}{dataset_name}_{split_name}.conllu"
             # TODO reduce double reading and use the featured dataset as the prime source
-            rels = read_rels_split(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}", lang, framework, corpus, context_sent, context_tok)
+            rels = read_rels_split(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}", lang, framework, corpus, sentences_for_context, tokens_for_context)
             # spans, tokens = get_segs_and_toks_for_docs(f"{DATA_DIR}/{dataset_name}/{dataset_name}_{split_name}", with_segs=True)
             # Just splicing the rows_with_features to the rels
-            rows_with_features = features.process_relfile(rels_file, conllu_file, dataset_name)
-            feat_keys = rows_with_features[0].keys()
-            rel_keys = rels.features.keys()
-            feats = feat_keys - rel_keys
-            rels = rels.map(lambda x, i:  {feat:rows_with_features[i][feat] for feat in feats} , with_indices=True)
+            if include_common_features is True or include_noncommon_features is True:
+                rows_with_features = features.process_relfile(rels_file, conllu_file, dataset_name)
+
+            common_feat_keys = ['nuc_children', 'sat_children', 'genre', 'u1_discontinuous', 'u2_discontinuous',
+                                'u1_issent', 'u2_issent', 'length_ratio', 'same_speaker', 'u1_func', 'u1_depdir',
+                                'u2_func', 'u2_pos', 'u2_depdir', 'u1_position', 'distance', 'lex_overlap_length',
+                                'unit1_case', 'unit2_case']
+
+            noncommon_feat_keys = ['u1_length', 'u2_length', 'u1_speaker', 'u2_speaker', 'u1_pos', 'doclen',
+                                   'u2_position', 'percent_distance', 'lex_overlap_words']
+
+            if include_common_features is True:
+                rels = rels.map(lambda x, i:  {feat:rows_with_features[i][feat] for feat in common_feat_keys} , with_indices=True)
+
+            if include_noncommon_features is True:
+                rels = rels.map(lambda x, i:  {feat:rows_with_features[i][feat] for feat in noncommon_feat_keys} , with_indices=True)
 
             # rels = rels.map(
             #     lambda x: {
@@ -333,8 +348,8 @@ def load_training_dataset(dataset_name, lang, framework, corpus, context_sent, c
         else:
             logger.warning(f"No {split_name} split found for {dataset_name}.")
 
-    load_split_if_it_exists("dev", context_sent, context_tok)
-    load_split_if_it_exists("train", context_sent, context_tok)
+    load_split_if_it_exists("dev")
+    load_split_if_it_exists("train")
 
     # Augment the dataset with meta features
     if "dev" in dataset:
@@ -344,12 +359,12 @@ def load_training_dataset(dataset_name, lang, framework, corpus, context_sent, c
         pass
     return dataset
 
-def get_combined_dataset(context_sent, context_tok):
+def get_combined_dataset(context_sent=0, context_tok=0, include_common_features=False, include_noncommon_features=False):
     """
     Combine all datasets into a single DatasetDict.
     """
     combined_dataset = DatasetDict()
-    all_datasets = [load_training_dataset(dataset_name, *get_meta_features_for_dataset(dataset_name), context_sent, context_tok) for dataset_name in get_list_of_dataset_from_data_dir(DATA_DIR)]
+    all_datasets = [get_dataset(dataset_name, context_sent, context_tok, include_common_features, include_noncommon_features) for dataset_name in get_list_of_dataset_from_data_dir(DATA_DIR)]
     combined_dataset["dev"] = datasets.concatenate_datasets(
         [dataset["dev"] for dataset in all_datasets if "dev" in dataset]
     )
@@ -372,10 +387,10 @@ if __name__ == "__main__":
             logger.info(get_list_of_dataset_from_data_dir("data"))
             for dataset_name in get_list_of_dataset_from_data_dir("data"):
                 logger.info(f"Loading dataset: {dataset_name}")
-                dataset = get_dataset(dataset_name)
+                dataset = get_dataset(dataset_name, 0, 0, False, True)
                 logger.info(dataset)
 
-            combined_dataset = get_combined_dataset()
+            combined_dataset = get_combined_dataset(include_common_features=True)
             logger.info(f"Combined Dataset: {combined_dataset}")
             # Sample 5 items from the combined dataset
             logger.info(f"Sampling from combined dataset")

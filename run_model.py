@@ -128,7 +128,7 @@ if __name__ == "__main__":
             lang, framework, corpus = disrptdata.get_meta_features_for_dataset(dataset_name)
             logger.info(f"Loading dataset: {dataset_name}")
             logger.info(f"Language: {lang}, Framework: {framework}, Dataset: {corpus}")
-            dataset = disrptdata.load_training_dataset(dataset_name, lang, framework, corpus)
+            dataset = disrptdata.get_dataset(dataset_name)
 
     print(dataset)
     results = train(model_name=args.model_name, dev_dataset=dataset['dev'], train_dataset=dataset['train'])
