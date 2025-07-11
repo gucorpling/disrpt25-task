@@ -23,7 +23,7 @@ def get_meta_features_for_dataset(dataset_name):
     return lang, framework, source_dataset
 
 def get_list_of_dataset_from_data_dir(data_dir):
-    datasets = [child.name for child in Path(data_dir).iterdir()]
+    datasets = [child.name for child in Path(data_dir).iterdir() if child.is_dir()]
     logger.info("Found the following datasets in the data directory:")
     return datasets
 
@@ -270,20 +270,21 @@ def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context
 
     lr2idx, idx2lr, toks_for_docs = get_segs_and_toks_for_docs_from_conllu(split_prefix)
     contexts = []
-    for i in range(0, len(split_lines)):
-        doc_id = doc_ids[i]
-        s1_tok = s1_toks[i]
-        s2_tok = s2_toks[i]
-        s1, s1_context = get_context(1, doc_id, s1_tok, lr2idx, idx2lr, toks_for_docs)
-        s2, s2_context = get_context(2, doc_id, s2_tok, lr2idx, idx2lr, toks_for_docs)
+    if context_sent > 0 or context_tok > 0:
+        for i in range(0, len(split_lines)):
+            doc_id = doc_ids[i]
+            s1_tok = s1_toks[i]
+            s2_tok = s2_toks[i]
+            s1, s1_context = get_context(1, doc_id, s1_tok, lr2idx, idx2lr, toks_for_docs)
+            s2, s2_context = get_context(2, doc_id, s2_tok, lr2idx, idx2lr, toks_for_docs)
 
-        if s1_tok == s2_tok:
-            context = [s1_context, s1, s2_context]
-        else:
-            context = [s1_context, s1+s2, s2_context]
-        contexts.append(context)
+            if s1_tok == s2_tok:
+                context = [s1_context, s1, s2_context]
+            else:
+                context = [s1_context, s1+s2, s2_context]
+            contexts.append(context)
 
-    return Dataset.from_dict({
+    data_dict = {
         "lang": [lang] * len(labels),
         "framework": [framework] * len(labels),
         "corpus": [corpus] * len(labels),
@@ -298,8 +299,11 @@ def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context
         "u2_sent": u2_sents,
         "text": [f"{u1} {u2}" for u1, u2 in zip(u1s, u2s)],
         "direction": directions,
-        "context": contexts
-    })
+    }
+    if len(contexts) > 0:
+        data_dict["context"] = contexts
+
+    return Dataset.from_dict(data_dict)
 
 # Load Dev and Train Datasets if they are present
 # context_sent: control the number of sentences; context_tok: control the number of tokens. Satisfy both of them
@@ -390,8 +394,8 @@ if __name__ == "__main__":
                 dataset = get_dataset(dataset_name, 0, 0, False, True)
                 logger.info(dataset)
 
-            combined_dataset = get_combined_dataset(include_common_features=True)
-            logger.info(f"Combined Dataset: {combined_dataset}")
+            combined_dataset = get_combined_dataset(context_sent=0, include_common_features=True)
+
             # Sample 5 items from the combined dataset
             logger.info(f"Sampling from combined dataset")
             for item in combined_dataset['dev'].shuffle(seed=42).select(range(5)):
