@@ -152,7 +152,7 @@ def predict(messages, model, tokenizer):
     return "Unknown"
 
 def eval():
-    checkpoint_name = "Qwen3-1.7B-markdown-augment-nldgum/checkpoint-3319"
+    checkpoint_name = "Qwen3-1.7B-markdown/checkpoint-3158"
     tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-1.7B", use_fast=False, trust_remote_code=True)
     # model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-1.7B", device_map="auto", torch_dtype="auto")
     model = AutoModelForCausalLM.from_pretrained(f"output/{checkpoint_name}", device_map="auto", torch_dtype="auto")
