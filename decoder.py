@@ -1,6 +1,7 @@
 import disrptdata
 import util
 import os
+import csv
 import pandas as pd
 from datasets import Dataset
 from functools import partial
@@ -18,7 +19,8 @@ import wandb
 
 
 # PROMPT = "You will be given two sentences. Please identify the discourse relation between them from the following set of options: contrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction. \nPlease output only the discourse relation label you choose.\n"
-PROMPT = "You are an expert in discourse analysis. Given two sentences and their directional relationship, please identify the discourse relation between them from the following set of options: contrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction. Please output only the label of the discourse relation you choose."
+# PROMPT = "You are an expert in discourse analysis. Given two sentences and their directional relationship, please identify the discourse relation between them from the following set of options: contrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction. Please output only the label of the discourse relation you choose."
+PROMPT = "## Role and Goal:\nYou are an expert in discourse analysis, tasked with identifying the discourse relation between two sentence spans based on the provided label. Your goal is to accurately determine the relationship between these two sentences.\n\n## Guidelines:\n1. You will receive Sentence 1 and Sentence 2. Sentence 1 appears before Sentence 2 in the original text.\n2. You will also be informed about the language of these sentences.\n3. The framework for analysis will be provided, outlining the structure used for discourse analysis.\n4. The direction of the relationship between these two sentences will be given.\n5. You will be provided with a set of labels representing possible discourse relations. Choose one label that best fits the relationship between Sentence 1 and Sentence 2, and output only the chosen label.\n\n## Labels:\ncontrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction"
 MAX_LENGTH = 32768
 MAX_RETRIES = 30
 LABELS = [
@@ -40,10 +42,16 @@ LABELS = [
     "causal",
     "conjunction"
 ]
+# DIRECTION_MAP = {"1>2": "from Sentence1 to Sentence 2", "1<2": "from Sentence2 to Sentence 1", "_": "unknown"}
+DIRECTION_MAP = {"1>2": "From Sentence1 to Sentence 2.", "1<2": "From Sentence2 to Sentence 1.", "_": "Unknown."}
 
 def preprocess_for_finetuning(example, tokenizer):
     # input = f"The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}"
-    input = f"## Sentence1:{example['u1']}\n## Sentence2:{example['u2']}\n## Direction:{example['direction']}"
+    # input = f"## Sentence1:{example['u1']}\n## Sentence2:{example['u2']}\n## Direction:{example['direction']}"
+
+    direction = DIRECTION_MAP[example['direction']]
+    # input = f"The direction is {direction}. The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}."
+    input = f"## Language:\n{example['lang']}\n\n## Framework:\n{example['framework']}\n\n## Direction:\n{direction}\n\n## Sentence1:\n{example['u1']}\n\n## Sentence2:\n{example['u2']}"
 
     input_ids, attention_mask, labels = [], [], []
     instruction = tokenizer(
@@ -84,10 +92,10 @@ def train():
     )
 
     args = TrainingArguments(
-        output_dir="./output/Qwen3-1.7B-refined",
-        per_device_train_batch_size=4,
-        per_device_eval_batch_size=4,
-        gradient_accumulation_steps=16,
+        output_dir="./output/Qwen3-1.7B-markdown-augment-nldgum",
+        per_device_train_batch_size=2,
+        per_device_eval_batch_size=2,
+        gradient_accumulation_steps=32,
         eval_strategy="epoch",
         # eval_steps=50,
         logging_steps=10,
@@ -128,6 +136,8 @@ def predict(messages, model, tokenizer):
             input_ids=model_inputs.input_ids,
             attention_mask=model_inputs.attention_mask,  # fix warning
             max_new_tokens=MAX_LENGTH,
+            # temperature=1.0,
+            do_sample=False,
         )
 
         generated_ids = [
@@ -142,7 +152,7 @@ def predict(messages, model, tokenizer):
     return "Unknown"
 
 def eval():
-    checkpoint_name = "Qwen3-1.7B-refined-augment/checkpoint-3658"
+    checkpoint_name = "Qwen3-1.7B-markdown-augment-nldgum/checkpoint-3319"
     tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-1.7B", use_fast=False, trust_remote_code=True)
     # model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-1.7B", device_map="auto", torch_dtype="auto")
     model = AutoModelForCausalLM.from_pretrained(f"output/{checkpoint_name}", device_map="auto", torch_dtype="auto")
@@ -155,10 +165,13 @@ def eval():
     group_stats = defaultdict(lambda: {"correct": 0, "total": 0})
 
     for example in tqdm(eval_ds, desc="Evaluating"):
-        input_text = f"The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}"
+        # input = f"The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}"
+        direction = DIRECTION_MAP[example['direction']]
+        # input = f"The direction is {direction}. The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}."
+        input = f"## Language:\n{example['lang']}\n\n## Framework:\n{example['framework']}\n\n## Direction:\n{direction}\n\n## Sentence1:\n{example['u1']}\n\n## Sentence2:\n{example['u2']}"
         messages = [
             {"role": "system", "content": PROMPT},
-            {"role": "user", "content": input_text}
+            {"role": "user", "content": input}
         ]
         pred = predict(messages, model, tokenizer).strip()
         gold = example['label'].strip()
@@ -192,17 +205,13 @@ def eval():
         
         for group, stats in group_stats.items():
             acc = stats['correct'] / stats['total'] * 100
-            writer.writerow([group, f"{acc:.2f}%", stats['correct'], stats['total']])
+            writer.writerow([group, f"{acc:.2f}", stats['correct'], stats['total']])
 
     print(f"Results have been saved to {csv_filename}")
 
-    print("Accuracy by group:")
-    for group, stats in group_stats.items():
-        acc = stats['correct'] / stats['total'] * 100
-        print(f"{group}: {acc:.2f}% ({stats['correct']}/{stats['total']})")
-
-
-
+    acc = group_stats['all']['correct'] / group_stats['all']['total'] * 100
+    print(f"All:{acc}")
+    
 if __name__ == "__main__":
     # train()
     eval()
