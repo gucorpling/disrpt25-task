@@ -23,8 +23,15 @@ def get_meta_features_for_dataset(dataset_name):
     return lang, framework, source_dataset
 
 def get_list_of_dataset_from_data_dir(data_dir):
+<<<<<<< Updated upstream
     datasets = [child.name for child in Path(data_dir).iterdir() if child.is_dir()]
     logger.info("Found the following datasets in the data directory:")
+=======
+    # datasets = [child.name for child in Path(data_dir).iterdir()]
+    # logger.info("Found the following datasets in the data directory:")
+    datasets = ['ces.erst.gum', 'deu.erst.gum', 'eus.erst.gum', 'fas.rst.rstdt', 'fra.erst.gum', 'nld.erst.gum', 'ces.rst.crdt', 'deu.rst.pcc', 'eng.dep.covdtb', 'eng.dep.scidtb', 'eng.erst.gentle', 'eng.erst.gum', 'eng.pdtb.gentle', 'eng.pdtb.gum', 'eng.pdtb.pdtb', 'eng.pdtb.tedm', 'eng.rst.oll', 'eng.rst.rstdt', 'eng.rst.sts', 'eng.sdrt.msdc', 'eng.sdrt.stac', 'eus.rst.ert', 'fas.rst.prstc', 'fra.sdrt.annodis', 'ita.pdtb.luna', 'nld.rst.nldt', 'por.pdtb.crpc', 'por.pdtb.tedm', 'por.rst.cstn', 'rus.rst.rrt', 'spa.rst.rststb', 'spa.rst.sctb', 'tha.pdtb.tdtb', 'tur.pdtb.tdb', 'tur.pdtb.tedm', 'zho.dep.scidtb', 'zho.pdtb.cdtb', 'zho.rst.gcdt', 'zho.rst.sctb']
+    # datasets = ['ces.erst.gum', 'deu.erst.gum', 'eus.erst.gum', 'fas.rst.rstdt', 'fra.erst.gum', 'nld.rst.oll', 'nld.rst.sts', 'ces.rst.crdt', 'deu.rst.pcc', 'eng.dep.covdtb', 'eng.dep.scidtb', 'eng.erst.gentle', 'eng.erst.gum', 'eng.pdtb.gentle', 'eng.pdtb.gum', 'eng.pdtb.pdtb', 'eng.pdtb.tedm', 'eng.rst.oll', 'eng.rst.rstdt', 'eng.rst.sts', 'eng.sdrt.msdc', 'eng.sdrt.stac', 'eus.rst.ert', 'fas.rst.prstc', 'fra.sdrt.annodis', 'ita.pdtb.luna', 'nld.rst.nldt', 'por.pdtb.crpc', 'por.pdtb.tedm', 'por.rst.cstn', 'rus.rst.rrt', 'spa.rst.rststb', 'spa.rst.sctb', 'tha.pdtb.tdtb', 'tur.pdtb.tdb', 'tur.pdtb.tedm', 'zho.dep.scidtb', 'zho.pdtb.cdtb', 'zho.rst.gcdt', 'zho.rst.sctb']
+>>>>>>> Stashed changes
     return datasets
 
 def get_dataset(dataset_name, context_sent=0, context_tok=0, include_common_features=True, include_noncommon_features=True):
@@ -244,6 +251,7 @@ def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context
             s_start = s_end = s_toks
 
         if (int(s_start), int(s_end)) in lr2idx:
+
             idx = lr2idx[(int(s_start), int(s_end))]
             s = ' '.join(toks_for_docs[(int(s_start)-1):int(s_end)])
         else:
@@ -265,7 +273,6 @@ def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context
                 break
             lr = idx2lr[context_idx]
             context.insert(0, toks_for_docs[lr[0]-1:lr[1]]) if s1ors2 == 1 else context.append(toks_for_docs[lr[0]-1:lr[1]])
-
         return s, " ".join(word for sublist in context for word in sublist)
 
     lr2idx, idx2lr, toks_for_docs = get_segs_and_toks_for_docs_from_conllu(split_prefix)
@@ -363,12 +370,21 @@ def load_training_dataset(dataset_name, sentences_for_context, tokens_for_contex
         pass
     return dataset
 
+<<<<<<< Updated upstream
 def get_combined_dataset(context_sent=0, context_tok=0, include_common_features=False, include_noncommon_features=False):
+=======
+def get_combined_dataset(context_sent=0, context_tok=0):
+>>>>>>> Stashed changes
     """
     Combine all datasets into a single DatasetDict.
     """
     combined_dataset = DatasetDict()
+<<<<<<< Updated upstream
     all_datasets = [get_dataset(dataset_name, context_sent, context_tok, include_common_features, include_noncommon_features) for dataset_name in get_list_of_dataset_from_data_dir(DATA_DIR)]
+=======
+    all_datasets = [load_training_dataset(dataset_name, *get_meta_features_for_dataset(dataset_name), context_sent, context_tok) for dataset_name in get_list_of_dataset_from_data_dir(DATA_DIR)]
+
+>>>>>>> Stashed changes
     combined_dataset["dev"] = datasets.concatenate_datasets(
         [dataset["dev"] for dataset in all_datasets if "dev" in dataset]
     )

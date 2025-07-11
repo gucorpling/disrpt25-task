@@ -61,7 +61,7 @@ def preprocess(batch):
         meta = f"[LANG:{lang}] [FW:{fw}] [CORP:{corpus}]"
 
         if direction == '1>2':
-            span = f"Arg1: }} {u1} > [SEP] Arg2: {u2}" # }}
+            span = f"Arg1: }} {u1} > [SEP] Arg2: {u2}" 
         elif direction == '1<2':
             span = f"Arg1: {u1} < Arg2: {u2} {{"
         else:
