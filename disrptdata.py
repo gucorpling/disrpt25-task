@@ -207,7 +207,8 @@ def get_context(s1ors2, doc_id, s_toks, lr2idx, idx2lr, toks_for_docs, context_s
         s_start = s_end = s_toks
 
     if (int(s_start), int(s_end)) in lr2idx:
-
+        
+        s = ' '.join(toks_for_docs[(int(s_start)-1):int(s_end)])
         idx = lr2idx[(int(s_start), int(s_end))]
     else:
         # example: eng.rst.rstdt_dev wsj_0629 (942, 1042)
@@ -217,6 +218,7 @@ def get_context(s1ors2, doc_id, s_toks, lr2idx, idx2lr, toks_for_docs, context_s
             if not (int(s_end) < start or int(s_start) > end):
                 sentence_range.append(sentence_number)
 
+        s = ' '.join(' '.join(toks_for_docs[s_start-1:s_end]) for s_r in sentence_range for s_start, s_end in [idx2lr[s_r]])
         idx = sentence_range[0] if s1ors2 == 1 else sentence_range[-1]
         
     context_idx = idx
@@ -227,7 +229,7 @@ def get_context(s1ors2, doc_id, s_toks, lr2idx, idx2lr, toks_for_docs, context_s
             break
         lr = idx2lr[context_idx]
         context.insert(0, toks_for_docs[lr[0]-1:lr[1]]) if s1ors2 == 1 else context.append(toks_for_docs[lr[0]-1:lr[1]])
-    return (int(s_start), int(s_end)), " ".join(word for sublist in context for word in sublist)
+    return s, " ".join(word for sublist in context for word in sublist)
 
 def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context_tok):
     # Ref : https://github.com/disrpt/sharedtask2025/blob/091404690ed4912ca55873616ddcaa7f26849308/utils/disrpt_eval_2024.py#L246
