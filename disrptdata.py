@@ -24,6 +24,9 @@ def get_meta_features_for_dataset(dataset_name):
 
 def get_list_of_dataset_from_data_dir(data_dir):
     datasets = [child.name for child in Path(data_dir).iterdir() if child.is_dir()]
+    datasets = ['ces.rst.crdt', 'deu.rst.pcc', 'eng.dep.covdtb', 'eng.dep.scidtb', 'eng.erst.gentle', 'eng.erst.gum', 'eng.pdtb.gentle', 'eng.pdtb.gum', 'eng.pdtb.pdtb', 'eng.pdtb.tedm', 'eng.rst.oll', 'eng.rst.rstdt', 'eng.rst.sts', 'eng.sdrt.msdc', 'eng.sdrt.stac', 'eus.rst.ert', 'fas.rst.prstc', 'fra.sdrt.annodis', 'ita.pdtb.luna', 'nld.rst.nldt', 'por.pdtb.crpc', 'por.pdtb.tedm', 'por.rst.cstn', 'rus.rst.rrt', 'spa.rst.rststb', 'spa.rst.sctb', 'tha.pdtb.tdtb', 'tur.pdtb.tdb', 'tur.pdtb.tedm', 'zho.dep.scidtb', 'zho.pdtb.cdtb', 'zho.rst.gcdt', 'zho.rst.sctb']
+    # datasets = ['ces.erst.gum', 'deu.erst.gum', 'eus.erst.gum', 'fas.rst.rstdt', 'fra.erst.gum', 'nld.erst.gum', 'ces.rst.crdt', 'deu.rst.pcc', 'eng.dep.covdtb', 'eng.dep.scidtb', 'eng.erst.gentle', 'eng.erst.gum', 'eng.pdtb.gentle', 'eng.pdtb.gum', 'eng.pdtb.pdtb', 'eng.pdtb.tedm', 'eng.rst.oll', 'eng.rst.rstdt', 'eng.rst.sts', 'eng.sdrt.msdc', 'eng.sdrt.stac', 'eus.rst.ert', 'fas.rst.prstc', 'fra.sdrt.annodis', 'ita.pdtb.luna', 'nld.rst.nldt', 'por.pdtb.crpc', 'por.pdtb.tedm', 'por.rst.cstn', 'rus.rst.rrt', 'spa.rst.rststb', 'spa.rst.sctb', 'tha.pdtb.tdtb', 'tur.pdtb.tdb', 'tur.pdtb.tedm', 'zho.dep.scidtb', 'zho.pdtb.cdtb', 'zho.rst.gcdt', 'zho.rst.sctb']
+    # datasets = ['ces.erst.gum', 'deu.erst.gum', 'eus.erst.gum', 'fas.rst.rstdt', 'fra.erst.gum', 'nld.rst.oll', 'nld.rst.sts', 'ces.rst.crdt', 'deu.rst.pcc', 'eng.dep.covdtb', 'eng.dep.scidtb', 'eng.erst.gentle', 'eng.erst.gum', 'eng.pdtb.gentle', 'eng.pdtb.gum', 'eng.pdtb.pdtb', 'eng.pdtb.tedm', 'eng.rst.oll', 'eng.rst.rstdt', 'eng.rst.sts', 'eng.sdrt.msdc', 'eng.sdrt.stac', 'eus.rst.ert', 'fas.rst.prstc', 'fra.sdrt.annodis', 'ita.pdtb.luna', 'nld.rst.nldt', 'por.pdtb.crpc', 'por.pdtb.tedm', 'por.rst.cstn', 'rus.rst.rrt', 'spa.rst.rststb', 'spa.rst.sctb', 'tha.pdtb.tdtb', 'tur.pdtb.tdb', 'tur.pdtb.tedm', 'zho.dep.scidtb', 'zho.pdtb.cdtb', 'zho.rst.gcdt', 'zho.rst.sctb']
     logger.info("Found the following datasets in the data directory:")
     return datasets
 
@@ -207,7 +210,8 @@ def get_context(s1ors2, doc_id, s_toks, lr2idx, idx2lr, toks_for_docs, context_s
         s_start = s_end = s_toks
 
     if (int(s_start), int(s_end)) in lr2idx:
-
+        
+        s = ' '.join(toks_for_docs[(int(s_start)-1):int(s_end)])
         idx = lr2idx[(int(s_start), int(s_end))]
     else:
         # example: eng.rst.rstdt_dev wsj_0629 (942, 1042)
@@ -217,6 +221,7 @@ def get_context(s1ors2, doc_id, s_toks, lr2idx, idx2lr, toks_for_docs, context_s
             if not (int(s_end) < start or int(s_start) > end):
                 sentence_range.append(sentence_number)
 
+        s = ' '.join(' '.join(toks_for_docs[s_start-1:s_end]) for s_r in sentence_range for s_start, s_end in [idx2lr[s_r]])
         idx = sentence_range[0] if s1ors2 == 1 else sentence_range[-1]
         
     context_idx = idx
@@ -227,7 +232,7 @@ def get_context(s1ors2, doc_id, s_toks, lr2idx, idx2lr, toks_for_docs, context_s
             break
         lr = idx2lr[context_idx]
         context.insert(0, toks_for_docs[lr[0]-1:lr[1]]) if s1ors2 == 1 else context.append(toks_for_docs[lr[0]-1:lr[1]])
-    return (int(s_start), int(s_end)), " ".join(word for sublist in context for word in sublist)
+    return , " ".join(word for sublist in context for word in sublist)
 
 def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context_tok):
     # Ref : https://github.com/disrpt/sharedtask2025/blob/091404690ed4912ca55873616ddcaa7f26849308/utils/disrpt_eval_2024.py#L246
