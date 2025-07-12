@@ -232,7 +232,7 @@ def get_context(s1ors2, doc_id, s_toks, lr2idx, idx2lr, toks_for_docs, context_s
             break
         lr = idx2lr[context_idx]
         context.insert(0, toks_for_docs[lr[0]-1:lr[1]]) if s1ors2 == 1 else context.append(toks_for_docs[lr[0]-1:lr[1]])
-    return , " ".join(word for sublist in context for word in sublist)
+    return s, " ".join(word for sublist in context for word in sublist)
 
 def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context_tok):
     # Ref : https://github.com/disrpt/sharedtask2025/blob/091404690ed4912ca55873616ddcaa7f26849308/utils/disrpt_eval_2024.py#L246
