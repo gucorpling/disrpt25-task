@@ -275,13 +275,12 @@ def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context
             s1, s1_context = get_context(1, doc_id, s1_tok, lr2idx, idx2lr, toks_for_docs, context_sent, context_tok)
             s2, s2_context = get_context(2, doc_id, s2_tok, lr2idx, idx2lr, toks_for_docs, context_sent, context_tok)
 
-            s_start = min(s1[0], s1[1], s2[0], s2[1])
-            s_end = max(s1[0], s1[1], s2[0], s2[1])
+            if s1_tok == s2_tok:
+                context = [s1_context, s1, s2_context]
+            else:
+                context = [s1_context, s1+s2, s2_context]
 
-            s = " ".join(toks_for_docs[doc_id][s_start-1:s_end])
-            context = [s1_context, s, s2_context]
             contexts.append(context)
-    
 
     data_dict = {
         "lang": [lang] * len(labels),
