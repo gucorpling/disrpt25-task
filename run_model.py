@@ -4,8 +4,10 @@ import json
 from torch import nn
 from pathlib import Path
 
-from transformers import AutoModel, Trainer, AutoTokenizer, DataCollatorWithPadding, AutoModelForSequenceClassification, \
-    TrainingArguments, set_seed
+import numpy as np
+from sklearn.metrics import classification_report, accuracy_score, precision_score, recall_score, f1_score
+from transformers import MT5EncoderModel, AutoModel, Trainer, AutoTokenizer, DataCollatorWithPadding, \
+    AutoModelForSequenceClassification, TrainingArguments, set_seed
 from datasets import Dataset, load_dataset, DatasetDict
 import evaluate
 
@@ -42,18 +44,20 @@ def train(model_name, dev_dataset, train_dataset):
     """The function uses huggingface to train model with dataset"""
 
     def compute_metrics(eval_pred):
-        accuracy = evaluate.load("accuracy")
-        precision = evaluate.load("precision")
-        recall = evaluate.load("recall")
-        f1 = evaluate.load("f1")
+        logits, labels = eval_pred
+        predictions = np.argmax(logits, axis=1)
 
-        predictions, labels = eval_pred
-        predictions = predictions.argmax(axis=1)
+        # get label names from the feature
+        label_names = get_disrpt_labels()
+
+        report = classification_report(labels, predictions, target_names=label_names)
+        print("\n=== Classification Report ===")
+        print(report)
         return {
-            'accuracy': accuracy.compute(predictions=predictions, references=labels),
-            'precision': precision.compute(predictions=predictions, references=labels, average='weighted'),
-            'recall': recall.compute(predictions=predictions, references=labels, average='weighted'),
-            'f1': f1.compute(predictions=predictions, references=labels, average='weighted')
+            'accuracy': accuracy_score.compute(predictions=predictions, references=labels),
+            'precision': precision_score.compute(predictions=predictions, references=labels, average='weighted'),
+            'recall': recall_score.compute(predictions=predictions, references=labels, average='weighted'),
+            'f1': f1_score.accuracy_score(predictions=predictions, references=labels, average='weighted')
         }
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -87,7 +91,7 @@ def train(model_name, dev_dataset, train_dataset):
     # train_dataset = train_dataset.shuffle(seed=42).select(range(64))
 
     collator = DataCollatorWithPadding(tokenizer=tokenizer, padding=True, max_length=512)
-    model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=17, label2id=label2id, id2label=id2label)
+    model = MT5EncoderModel.from_pretrained(model_name, num_labels=len(disrpt_labels), label2id=label2id, id2label=id2label)
     training_args = TrainingArguments(
         output_dir=f"./results/{model_name}-{seed}",
         learning_rate=2e-5,
@@ -109,8 +113,10 @@ def train(model_name, dev_dataset, train_dataset):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset_name", type=str, action='store', default='combined',)
-    parser.add_argument("--model_name", type=str, required=True,)
+    parser.add_argument("--dataset_name", type=str, default='combined')
+    parser.add_argument("--model_name", type=str, default = "google/mt5-small")
+    parser.add_argument("--test", action="store_true")
+
     args = parser.parse_args()
     # TODO support seed as a CLI parameter
     seed = 42
@@ -131,12 +137,17 @@ if __name__ == "__main__":
             dataset = disrptdata.get_dataset(dataset_name)
 
     print(dataset)
-    results = train(model_name=args.model_name, dev_dataset=dataset['dev'], train_dataset=dataset['train'])
+    dev_dataset = dataset['dev']
+    train_dataset = dataset['train']
+
+    if args.test is True:
+        dev_dataset = dev_dataset.shuffle(seed=seed).select(range(64))
+        train_dataset = train_dataset.shuffle(seed=seed).select(range(64))
+
+    results = train(model_name=args.model_name, dev_dataset=dev_dataset, train_dataset=train_dataset)
     print(f"Results for model {args.model_name}: {results}")
     # Save the results to a file as JSON
     output_file = f"./results/{args.model_name}/results.json"
     Path(output_file).parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, 'w') as f:
         json.dump(results, f, indent=4)
-
-
