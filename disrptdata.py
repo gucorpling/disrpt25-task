@@ -24,6 +24,19 @@ def get_meta_features_for_dataset(dataset_name):
 
 def get_list_of_dataset_from_data_dir(data_dir):
     datasets = [child.name for child in Path(data_dir).iterdir() if child.is_dir()]
+    # Only augmented data
+    # datasets = ['ces.erst.gum', 'deu.erst.gum', 'eus.erst.gum', 'fas.rst.rstdt', 'fra.erst.gum', 'nld.rst.oll', 'nld.rst.sts', 'eng.dep.covdtb']
+    # Only original data
+    # datasets = ['ces.rst.crdt', 'deu.rst.pcc', 'eng.dep.covdtb', 'eng.dep.scidtb', 'eng.erst.gentle', 'eng.erst.gum', 'eng.pdtb.gentle', 'eng.pdtb.gum', 'eng.pdtb.pdtb', 'eng.pdtb.tedm', 'eng.rst.oll', 'eng.rst.rstdt', 'eng.rst.sts', 'eng.sdrt.msdc', 'eng.sdrt.stac', 'eus.rst.ert', 'fas.rst.prstc', 'fra.sdrt.annodis', 'ita.pdtb.luna', 'nld.rst.nldt', 'por.pdtb.crpc', 'por.pdtb.tedm', 'por.rst.cstn', 'rus.rst.rrt', 'spa.rst.rststb', 'spa.rst.sctb', 'tha.pdtb.tdtb', 'tur.pdtb.tdb', 'tur.pdtb.tedm', 'zho.dep.scidtb', 'zho.pdtb.cdtb', 'zho.rst.gcdt', 'zho.rst.sctb']
+    # nld gum
+    # datasets = ['ces.erst.gum', 'deu.erst.gum', 'eus.erst.gum', 'fas.rst.rstdt', 'fra.erst.gum', 'nld.erst.gum', 'ces.rst.crdt', 'deu.rst.pcc', 'eng.dep.covdtb', 'eng.dep.scidtb', 'eng.erst.gentle', 'eng.erst.gum', 'eng.pdtb.gentle', 'eng.pdtb.gum', 'eng.pdtb.pdtb', 'eng.pdtb.tedm', 'eng.rst.oll', 'eng.rst.rstdt', 'eng.rst.sts', 'eng.sdrt.msdc', 'eng.sdrt.stac', 'eus.rst.ert', 'fas.rst.prstc', 'fra.sdrt.annodis', 'ita.pdtb.luna', 'nld.rst.nldt', 'por.pdtb.crpc', 'por.pdtb.tedm', 'por.rst.cstn', 'rus.rst.rrt', 'spa.rst.rststb', 'spa.rst.sctb', 'tha.pdtb.tdtb', 'tur.pdtb.tdb', 'tur.pdtb.tedm', 'zho.dep.scidtb', 'zho.pdtb.cdtb', 'zho.rst.gcdt', 'zho.rst.sctb']
+    # nld oll sts
+    # datasets = ['ces.erst.gum', 'deu.erst.gum', 'eus.erst.gum', 'fas.rst.rstdt', 'fra.erst.gum', 'ces.rst.crdt', 'deu.rst.pcc', 'eng.dep.covdtb', 'eng.dep.scidtb', 'eng.erst.gentle', 'eng.erst.gum', 'eng.pdtb.gentle', 'eng.pdtb.gum', 'eng.pdtb.pdtb', 'eng.pdtb.tedm', 'eng.rst.oll', 'eng.rst.rstdt', 'eng.rst.sts', 'eng.sdrt.msdc', 'eng.sdrt.stac', 'eus.rst.ert', 'fas.rst.prstc', 'fra.sdrt.annodis', 'ita.pdtb.luna', 'nld.rst.nldt', 'por.pdtb.crpc', 'por.pdtb.tedm', 'por.rst.cstn', 'rus.rst.rrt', 'spa.rst.rststb', 'spa.rst.sctb', 'tha.pdtb.tdtb', 'tur.pdtb.tdb', 'tur.pdtb.tedm', 'zho.dep.scidtb', 'zho.pdtb.cdtb', 'zho.rst.gcdt', 'zho.rst.sctb']
+
+    # curriculum
+    # datasets = ['eng.dep.covdtb', 'eng.dep.scidtb', 'eng.erst.gentle', 'eng.erst.gum', 'eng.pdtb.gentle', 'eng.pdtb.gum', 'eng.pdtb.pdtb', 'eng.pdtb.tedm', 'eng.rst.oll', 'eng.rst.rstdt', 'eng.rst.sts', 'eng.sdrt.msdc', 'eng.sdrt.stac', 'zho.dep.scidtb', 'zho.pdtb.cdtb', 'zho.rst.gcdt', 'zho.rst.sctb']
+    # datasets = ['spa.rst.rststb', 'spa.rst.sctb', 'fra.sdrt.annodis', 'por.pdtb.crpc', 'por.pdtb.tedm', 'por.rst.cstn', 'ita.pdtb.luna', 'nld.rst.nldt', 'tha.pdtb.tdtb']
+    # datasets = ['fas.rst.prstc', 'tur.pdtb.tdb', 'tur.pdtb.tedm', 'eus.rst.ert', 'rus.rst.rrt', 'deu.rst.pcc', 'ces.rst.crdt']
     logger.info("Found the following datasets in the data directory:")
     return datasets
 
