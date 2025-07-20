@@ -20,10 +20,10 @@ from transformers import (
 import wandb 
 
 
-# PROMPT = "You will be given two sentences. Please identify the discourse relation between them from the following set of options: contrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction. \nPlease output only the discourse relation label you choose.\n"
+PROMPT = "You will be given two sentences. Please identify the discourse relation between them from the following set of options: contrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction. \nPlease output only the discourse relation label you choose.\n"
 # PROMPT = "You are an expert in discourse analysis. Given two sentences and their directional relationship, please identify the discourse relation between them from the following set of options: contrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction. Please output only the label of the discourse relation you choose."
 # PROMPT = "## Role and Goal:\nYou are an expert in discourse analysis, tasked with identifying the discourse relation between two sentence spans based on the provided label. Your goal is to accurately determine the relationship between these two sentences.\n\n## Guidelines:\n1. You will receive Sentence 1 and Sentence 2. Sentence 1 appears before Sentence 2 in the original text.\n2. You will also be informed about the language of these sentences.\n3. The framework for analysis will be provided, outlining the structure used for discourse analysis.\n4. The direction of the relationship between these two sentences will be given.\n5. You will be provided with a set of labels representing possible discourse relations. Choose one label that best fits the relationship between Sentence 1 and Sentence 2, and output only the chosen label.\n\n## Labels:\ncontrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction"
-PROMPT = "## Role and Goal:\nYou are an expert in discourse analysis, tasked with identifying the discourse relation between two sentence spans based on the provided label. Your goal is to accurately determine the relationship between these two sentences.\n\n## Guidelines:\n1. You will receive Sentence 1 and Sentence 2. Sentence 1 appears before Sentence 2 in the original text.\n2. You will also be informed about the language of these sentences.\n3. The framework for analysis will be provided, outlining the structure used for discourse analysis.\n4. The direction of the relationship between these two sentences will be given.\n5. You will be given the context in which these two sentences appear.\n6. You will be provided with a set of labels representing possible discourse relations. Choose one label that best fits the relationship between Sentence 1 and Sentence 2, and output only the chosen label.\n\n## Labels:\ncontrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction"
+# PROMPT = "## Role and Goal:\nYou are an expert in discourse analysis, tasked with identifying the discourse relation between two sentence spans based on the provided label. Your goal is to accurately determine the relationship between these two sentences.\n\n## Guidelines:\n1. You will receive Sentence 1 and Sentence 2. Sentence 1 appears before Sentence 2 in the original text.\n2. You will also be informed about the language of these sentences.\n3. The framework for analysis will be provided, outlining the structure used for discourse analysis.\n4. The direction of the relationship between these two sentences will be given.\n5. You will be given the context in which these two sentences appear.\n6. You will be provided with a set of labels representing possible discourse relations. Choose one label that best fits the relationship between Sentence 1 and Sentence 2, and output only the chosen label.\n\n## Labels:\ncontrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction"
 
 MAX_LENGTH = 32768
 MAX_RETRIES = 30
@@ -50,14 +50,14 @@ LABELS = [
 DIRECTION_MAP = {"1>2": "From Sentence1 to Sentence 2.", "1<2": "From Sentence2 to Sentence 1.", "_": "Unknown."}
 
 def preprocess_for_finetuning(example, tokenizer):
-    # input = f"The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}"
+    input = f"The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}"
     # input = f"## Sentence1:{example['u1']}\n## Sentence2:{example['u2']}\n## Direction:{example['direction']}"
 
-    direction = DIRECTION_MAP[example['direction']]
+    # direction = DIRECTION_MAP[example['direction']]
     # input = f"The direction is {direction}. The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}."
     # input = f"## Language:\n{example['lang']}\n\n## Framework:\n{example['framework']}\n\n## Direction:\n{direction}\n\n## Sentence1:\n{example['u1']}\n\n## Sentence2:\n{example['u2']}"
-    context = f"{example['context'][0]} {example['context'][1]} {example['context'][2]}"
-    input = f"## Language:\n{example['lang']}\n\n## Framework:\n{example['framework']}\n\n## Direction:\n{direction}\n\n## Context:\n{context}\n\n## Sentence1:\n{example['u1']}\n\n## Sentence2:\n{example['u2']}"
+    # context = f"{example['context'][0]} {example['context'][1]} {example['context'][2]}"
+    # input = f"## Language:\n{example['lang']}\n\n## Framework:\n{example['framework']}\n\n## Direction:\n{direction}\n\n## Context:\n{context}\n\n## Sentence1:\n{example['u1']}\n\n## Sentence2:\n{example['u2']}"
 
     input_ids, attention_mask, labels = [], [], []
     instruction = tokenizer(
@@ -85,7 +85,7 @@ def train():
 
     model.enable_input_require_grads()
 
-    dataset = disrptdata.get_combined_dataset(1, 30)
+    dataset = disrptdata.get_combined_dataset(0, 0, include_common_features=False, include_noncommon_features=False, data_type="orig")
     
     train_ds = dataset['train']
     train_dataset = train_ds.map(
@@ -100,14 +100,14 @@ def train():
     )
 
     args = TrainingArguments(
-        output_dir="./output/Qwen3-4B-markdown-context-order-hyper",
+        output_dir="./output/Qwen3-4B-hyper",
         per_device_train_batch_size=1,
         per_device_eval_batch_size=1,
-        gradient_accumulation_steps=32,
+        gradient_accumulation_steps=16,
         eval_strategy="epoch",
         # eval_steps=50,
         logging_steps=10,
-        num_train_epochs=2,
+        num_train_epochs=1,
         save_strategy="epoch",
         # save_steps=300,
         learning_rate=5e-5,
@@ -163,25 +163,25 @@ def predict(messages, model, tokenizer):
     return "Unknown"
 
 def eval():
-    checkpoint_name = "Qwen3-1.7B-markdown-context-curriculum-lang/checkpoint-506"
+    checkpoint_name = "Qwen3-4B-hyper/checkpoint-3665"
     tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B", use_fast=False, trust_remote_code=True)
     # model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-1.7B", device_map="auto", torch_dtype="auto")
     model = AutoModelForCausalLM.from_pretrained(f"output/{checkpoint_name}", device_map="auto", torch_dtype="auto")
 
-    dataset = disrptdata.get_combined_dataset(1, 30)
-    eval_ds = dataset.get('dev', [])
+    dataset = disrptdata.get_combined_dataset(0, 0, include_common_features=False, include_noncommon_features=False, data_type="orig")
+    eval_ds = dataset.get('test', [])
 
     preds, labels = [], []
 
     group_stats = defaultdict(lambda: {"correct": 0, "total": 0})
 
     for example in tqdm(eval_ds, desc="Evaluating"):
-        # input = f"The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}"
-        direction = DIRECTION_MAP[example['direction']]
+        input = f"The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}"
+        # direction = DIRECTION_MAP[example['direction']]
         # input = f"The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}. The direction is {direction}."
         # input = f"## Language:\n{example['lang']}\n\n## Framework:\n{example['framework']}\n\n## Direction:\n{direction}\n\n## Sentence1:\n{example['u1']}\n\n## Sentence2:\n{example['u2']}"
-        context = f"{example['context'][0]} {example['context'][1]} {example['context'][2]}"
-        input = f"## Language:\n{example['lang']}\n\n## Framework:\n{example['framework']}\n\n## Direction:\n{direction}\n\n## Context:\n{context}\n\n## Sentence1:\n{example['u1']}\n\n## Sentence2:\n{example['u2']}"
+        # context = f"{example['context'][0]} {example['context'][1]} {example['context'][2]}"
+        # input = f"## Language:\n{example['lang']}\n\n## Framework:\n{example['framework']}\n\n## Direction:\n{direction}\n\n## Context:\n{context}\n\n## Sentence1:\n{example['u1']}\n\n## Sentence2:\n{example['u2']}"
         messages = [
             {"role": "system", "content": PROMPT},
             {"role": "user", "content": input}
@@ -226,9 +226,5 @@ def eval():
     print(f"All:{acc}")
     
 if __name__ == "__main__":
-    train()
-    # eval()
-
-
-
-
+    # train()
+    eval()

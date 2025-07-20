@@ -497,11 +497,11 @@ def transform_to_dataset(target_lang, split_name, output_name):
     with open(file_name, 'r') as f:
         data = json.load(f)
 
-    # data = tokenize_translation(data, target_lang)
+    data = tokenize_translation(data, target_lang)
 
-    # # Save tokenized version temporarily
-    # with open(file_name, "w", encoding="utf-8") as f:
-    #     json.dump(data, f, ensure_ascii=False, indent=4)
+    # Save tokenized version temporarily
+    with open(file_name, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
     reordered, span_mapping = generate_mapping(data)
 
@@ -527,10 +527,10 @@ def transform_to_dataset(target_lang, split_name, output_name):
     shutil.move(f"{split_name}_{target_lang}.rels", f"intermediate/{split_name}_{target_lang}.rels")
 
 def main():
-    split_name = "eng.rst.sts"
+    split_name = "eng.pdtb.gum"
     split_name = f"{DATA_DIR}/{split_name}/{split_name}_train"
-    output_name = ".rst.sts"
-    lang = "nld"
+    output_name = ".pdtm.gum"
+    lang = "deu"
     # lang_dataset_name = "fas.rst.prstc"
     # lang_dataset_name = f"{DATA_DIR}/{lang_dataset_name}/{lang_dataset_name}_train"
     # sentence_ids = get_original_text(split_name)
