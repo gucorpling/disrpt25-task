@@ -22,24 +22,20 @@ def get_meta_features_for_dataset(dataset_name):
     source_dataset = source_dataset.split("_")[0]  # Remove any suffix like -v1
     return lang, framework, source_dataset
 
-def get_list_of_dataset_from_data_dir(data_dir):
-    datasets = [child.name for child in Path(data_dir).iterdir() if child.is_dir()]
+def get_list_of_dataset_from_data_dir(data_dir, data_type="all"):
     # Only augmented data
-    # datasets = ['ces.erst.gum', 'deu.erst.gum', 'eus.erst.gum', 'fas.rst.rstdt', 'fra.erst.gum', 'nld.rst.oll', 'nld.rst.sts', 'eng.dep.covdtb']
-    # Only original data
-    # datasets = ['ces.rst.crdt', 'deu.rst.pcc', 'eng.dep.covdtb', 'eng.dep.scidtb', 'eng.erst.gentle', 'eng.erst.gum', 'eng.pdtb.gentle', 'eng.pdtb.gum', 'eng.pdtb.pdtb', 'eng.pdtb.tedm', 'eng.rst.oll', 'eng.rst.rstdt', 'eng.rst.sts', 'eng.sdrt.msdc', 'eng.sdrt.stac', 'eus.rst.ert', 'fas.rst.prstc', 'fra.sdrt.annodis', 'ita.pdtb.luna', 'nld.rst.nldt', 'por.pdtb.crpc', 'por.pdtb.tedm', 'por.rst.cstn', 'rus.rst.rrt', 'spa.rst.rststb', 'spa.rst.sctb', 'tha.pdtb.tdtb', 'tur.pdtb.tdb', 'tur.pdtb.tedm', 'zho.dep.scidtb', 'zho.pdtb.cdtb', 'zho.rst.gcdt', 'zho.rst.sctb']
-    # nld gum
-    # datasets = ['ces.erst.gum', 'deu.erst.gum', 'eus.erst.gum', 'fas.rst.rstdt', 'fra.erst.gum', 'nld.erst.gum', 'ces.rst.crdt', 'deu.rst.pcc', 'eng.dep.covdtb', 'eng.dep.scidtb', 'eng.erst.gentle', 'eng.erst.gum', 'eng.pdtb.gentle', 'eng.pdtb.gum', 'eng.pdtb.pdtb', 'eng.pdtb.tedm', 'eng.rst.oll', 'eng.rst.rstdt', 'eng.rst.sts', 'eng.sdrt.msdc', 'eng.sdrt.stac', 'eus.rst.ert', 'fas.rst.prstc', 'fra.sdrt.annodis', 'ita.pdtb.luna', 'nld.rst.nldt', 'por.pdtb.crpc', 'por.pdtb.tedm', 'por.rst.cstn', 'rus.rst.rrt', 'spa.rst.rststb', 'spa.rst.sctb', 'tha.pdtb.tdtb', 'tur.pdtb.tdb', 'tur.pdtb.tedm', 'zho.dep.scidtb', 'zho.pdtb.cdtb', 'zho.rst.gcdt', 'zho.rst.sctb']
-    # nld oll sts
-    # datasets = ['ces.erst.gum', 'deu.erst.gum', 'eus.erst.gum', 'fas.rst.rstdt', 'fra.erst.gum', 'ces.rst.crdt', 'deu.rst.pcc', 'eng.dep.covdtb', 'eng.dep.scidtb', 'eng.erst.gentle', 'eng.erst.gum', 'eng.pdtb.gentle', 'eng.pdtb.gum', 'eng.pdtb.pdtb', 'eng.pdtb.tedm', 'eng.rst.oll', 'eng.rst.rstdt', 'eng.rst.sts', 'eng.sdrt.msdc', 'eng.sdrt.stac', 'eus.rst.ert', 'fas.rst.prstc', 'fra.sdrt.annodis', 'ita.pdtb.luna', 'nld.rst.nldt', 'por.pdtb.crpc', 'por.pdtb.tedm', 'por.rst.cstn', 'rus.rst.rrt', 'spa.rst.rststb', 'spa.rst.sctb', 'tha.pdtb.tdtb', 'tur.pdtb.tdb', 'tur.pdtb.tedm', 'zho.dep.scidtb', 'zho.pdtb.cdtb', 'zho.rst.gcdt', 'zho.rst.sctb']
+    augmented_datasets = ['ces.erst.gum', 'deu.erst.gum', 'deu.pdtm.gum', 'eus.erst.gum','fas.rst.rstdt', 'fra.erst.gum', 'nld.rst.oll', 'nld.rst.sts']
 
-    # curriculum
-    # datasets = ['eng.dep.covdtb', 'eng.dep.scidtb', 'eng.erst.gentle', 'eng.erst.gum', 'eng.pdtb.gentle', 'eng.pdtb.gum', 'eng.pdtb.pdtb', 'eng.pdtb.tedm', 'eng.rst.oll', 'eng.rst.rstdt', 'eng.rst.sts', 'eng.sdrt.msdc', 'eng.sdrt.stac', 'zho.dep.scidtb', 'zho.pdtb.cdtb', 'zho.rst.gcdt', 'zho.rst.sctb']
-    # datasets = ['spa.rst.rststb', 'spa.rst.sctb', 'fra.sdrt.annodis', 'por.pdtb.crpc', 'por.pdtb.tedm', 'por.rst.cstn', 'ita.pdtb.luna', 'nld.rst.nldt', 'tha.pdtb.tdtb']
-    # datasets = ['fas.rst.prstc', 'tur.pdtb.tdb', 'tur.pdtb.tedm', 'eus.rst.ert', 'rus.rst.rrt', 'deu.rst.pcc', 'ces.rst.crdt']
-    logger.info("Found the following datasets in the data directory:")
-    return datasets
-
+    if data_type == "aug":
+        return augmented_datasets
+    elif data_type == "all":
+        datasets = [child.name for child in Path(data_dir).iterdir() if child.is_dir()]
+        return datasets
+    elif data_type == "orig":
+        datasets = [child.name for child in Path(data_dir).iterdir() if child.is_dir()]
+        original_datasets = [dataset for dataset in datasets if dataset not in augmented_datasets]
+        return original_datasets
+    
 def get_dataset(dataset_name, context_sent=0, context_tok=0, include_common_features=True, include_noncommon_features=True):
     return load_training_dataset(dataset_name, context_sent, context_tok, include_common_features,
                                  include_noncommon_features)
@@ -267,6 +263,9 @@ def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context
 
     labels = [line[LABEL_ID] for line in split_lines]
     doc_ids = [line[0] for line in split_lines]
+    # tackle pcm.pdtb.disconaija
+    if "pcm.pdtb.disconaija" in split_prefix:
+        doc_ids = [line[0].removesuffix(".txt") for line in split_lines]
     u1s = [line[U1_ID] for line in split_lines]
     u1_toks = [line[UNIT_1_TOKS].split("-") for line in split_lines]
     u2s = [line[U2_ID] for line in split_lines]
@@ -367,6 +366,7 @@ def load_training_dataset(dataset_name, sentences_for_context, tokens_for_contex
 
     load_split_if_it_exists("dev")
     load_split_if_it_exists("train")
+    load_split_if_it_exists("test")
 
     # Augment the dataset with meta features
     if "dev" in dataset:
@@ -374,21 +374,32 @@ def load_training_dataset(dataset_name, sentences_for_context, tokens_for_contex
 
     if "train" in dataset:
         pass
+
+    if "test" in dataset:
+        pass
     return dataset
 
-def get_combined_dataset(context_sent=0, context_tok=0, include_common_features=False, include_noncommon_features=False):
+def get_combined_dataset(context_sent=0, context_tok=0, include_common_features=False, include_noncommon_features=False, data_type="all"):
     """
     Combine all datasets into a single DatasetDict.
     """
     combined_dataset = DatasetDict()
-    all_datasets = [get_dataset(dataset_name, context_sent, context_tok, include_common_features, include_noncommon_features) for dataset_name in get_list_of_dataset_from_data_dir(DATA_DIR)]
+    all_datasets = [get_dataset(dataset_name, context_sent, context_tok, include_common_features, include_noncommon_features) for dataset_name in get_list_of_dataset_from_data_dir(DATA_DIR, data_type)]
 
-    combined_dataset["dev"] = datasets.concatenate_datasets(
-        [dataset["dev"] for dataset in all_datasets if "dev" in dataset]
-    )
-    combined_dataset["train"] = datasets.concatenate_datasets(
-        [dataset["train"] for dataset in all_datasets if "train" in dataset]
-    )
+    def safe_concat(datasets_list, key):
+        splits = [ds[key] for ds in datasets_list if key in ds and len(ds[key]) > 0]
+        return datasets.concatenate_datasets(splits) if splits else None
+    
+    # combined_dataset["dev"] = datasets.concatenate_datasets(
+    #     [dataset["dev"] for dataset in all_datasets if "dev" in dataset]
+    # )
+    # combined_dataset["train"] = datasets.concatenate_datasets(
+    #     [dataset["train"] for dataset in all_datasets if "train" in dataset]
+    # )
+    combined_dataset["dev"] = safe_concat(all_datasets, 'dev')
+    combined_dataset["train"] = safe_concat(all_datasets, 'train')
+    combined_dataset["test"] = safe_concat(all_datasets, 'test')
+    
     return combined_dataset
 
 
