@@ -151,7 +151,7 @@ def prune(model_name, prune_layers):
     print("Generated text:", qwen_tokenizer.decode(generated[0], skip_special_tokens=True))
 
 if __name__ == "__main__":
-    model_name = "output/Qwen3-4B"
+    model_name = "output/Qwen3-4B-Base"
     prune_layers = 1
     prune(model_name, prune_layers)
 
