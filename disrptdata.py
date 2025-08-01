@@ -24,8 +24,8 @@ def get_meta_features_for_dataset(dataset_name):
 
 def get_list_of_dataset_from_data_dir(data_dir, data_type="all"):
     # Only augmented data
-    augmented_datasets = ['ces.erst.gum', 'deu.erst.gum', 'deu.pdtm.gum', 'eus.erst.gum','fas.rst.rstdt', 'fra.erst.gum', 'nld.rst.oll', 'nld.rst.sts']
-
+    # augmented_datasets = ['ces.erst.gum', 'deu.erst.gum', 'deu.pdtb.gum', 'eus.erst.gum','fas.rst.rstdt', 'fra.erst.gum', 'nld.rst.oll', 'nld.rst.sts']
+    augmented_datasets = ['deu.erst.gum', 'deu.pdtb.gum', 'eus.erst.gum','fas.rst.rstdt', 'fra.erst.gum', 'nld.rst.oll', 'nld.rst.sts']
     if data_type == "aug":
         return augmented_datasets
     elif data_type == "all":
@@ -86,7 +86,7 @@ def get_segs_and_toks_for_docs_from_conllu(split_prefix):
         for sentence in data[fn]:
             sent = []
             for token in sentence:
-                if '-' not in str(token['id']):
+                if '-' not in str(token['id']) and '.' not in str(token['id']):
                     sent.append(token['form'])
                     toks_for_docs[fn].append(token['form'])
             sents_for_docs[fn].append(sent)
@@ -251,8 +251,8 @@ def read_rels_split(split_prefix, lang, framework, corpus, context_sent, context
     DIRECTION_ID = -4
     TYPE_ID = -3
     LABEL_ID = -1
-    UNIT_1_TOKS = 2
-    UNIT_2_TOKS = 3
+    UNIT_1_TOKS = 1
+    UNIT_2_TOKS = 2
     U1_ID = 5
     U2_ID = 6
     S1_TOKS = 7
@@ -385,7 +385,6 @@ def get_combined_dataset(context_sent=0, context_tok=0, include_common_features=
     """
     combined_dataset = DatasetDict()
     all_datasets = [get_dataset(dataset_name, context_sent, context_tok, include_common_features, include_noncommon_features) for dataset_name in get_list_of_dataset_from_data_dir(DATA_DIR, data_type)]
-
     def safe_concat(datasets_list, key):
         splits = [ds[key] for ds in datasets_list if key in ds and len(ds[key]) > 0]
         return datasets.concatenate_datasets(splits) if splits else None

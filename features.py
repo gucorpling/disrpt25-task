@@ -164,6 +164,7 @@ def get_case(text,lang):
 
 
 def process_relfile(infile, conllu, corpus, as_string=False, keep_all_columns=False, do_zscore=False):
+    infile_name = infile
     lang = corpus.split(".")[0]
     try:
         stop_list = stop[lang]
@@ -213,6 +214,8 @@ def process_relfile(infile, conllu, corpus, as_string=False, keep_all_columns=Fa
     for line in conllu.split("\n"):
         if "# newdoc" in line:
             docname = line.split("=")[1].strip()
+            if "pcm.pdtb.disconaija" in infile_name:
+                docname = docname + ".txt"
             toknum = 1
             offset = 0
         if "# speaker" in line:

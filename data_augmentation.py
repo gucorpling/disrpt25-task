@@ -529,7 +529,7 @@ def transform_to_dataset(target_lang, split_name, output_name):
 def main():
     split_name = "eng.pdtb.gum"
     split_name = f"{DATA_DIR}/{split_name}/{split_name}_train"
-    output_name = ".pdtm.gum"
+    output_name = ".pdtb.gum"
     lang = "deu"
     # lang_dataset_name = "fas.rst.prstc"
     # lang_dataset_name = f"{DATA_DIR}/{lang_dataset_name}/{lang_dataset_name}_train"
