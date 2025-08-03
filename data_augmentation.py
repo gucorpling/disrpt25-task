@@ -7,6 +7,7 @@ from tqdm import tqdm
 import time, io, json, re, stanza, shutil, random
 
 MODEL = "gpt-4.1"
+API_KEYS = ""
 DATA_DIR = "data"
 LANGUAGES = {"ces": "Czech", "deu": "German", "eus": "Basque", "fra": "French", "nld": "Dutch", "fas": "Persian"}
 LANGUAGES_STANZA = {"ces": "cs", "deu": "de", "eus": "eu", "fra": "fr", "nld": "nl", "fas": "fa"}
@@ -23,7 +24,7 @@ def check_string_format(s):
 
 def call_api(model, system, message, num):
     
-    client = OpenAI(api_key="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")
+    client = OpenAI(api_key="API_KEYS")
 
     tries = 0
 
@@ -160,9 +161,9 @@ def get_filtered_data(split_name, lang, dataset_name):
             # break
         # classify_lines_by_labels[line[-1]].append("\t".join(line))
     # GUM
-    for line in split_lines:
-        if ("GUM_bio" in line[0] or "GUM_news" in line[0] or "GUM_letter" in line[0]) and "," not in line[1] and "," not in line[2]:
-            classify_lines_by_labels[line[-1]].append("\t".join(line))
+    # for line in split_lines:
+    #     if ("GUM_bio" in line[0] or "GUM_news" in line[0] or "GUM_letter" in line[0]) and "," not in line[1] and "," not in line[2]:
+    #         classify_lines_by_labels[line[-1]].append("\t".join(line))
     # others
     for line in split_lines:
         classify_lines_by_labels[line[-1]].append("\t".join(line))
@@ -531,12 +532,12 @@ def main():
     split_name = f"{DATA_DIR}/{split_name}/{split_name}_train"
     output_name = ".pdtb.gum"
     lang = "deu"
-    # lang_dataset_name = "fas.rst.prstc"
-    # lang_dataset_name = f"{DATA_DIR}/{lang_dataset_name}/{lang_dataset_name}_train"
-    # sentence_ids = get_original_text(split_name)
-    # translate_original_text_into_target_language(lang, sentence_ids, split_name)
+    lang_dataset_name = "deu.pdtb.pcc"
+    lang_dataset_name = f"{DATA_DIR}/{lang_dataset_name}/{lang_dataset_name}_train"
+    sentence_ids = get_original_text(split_name)
+    translate_original_text_into_target_language(lang, sentence_ids, split_name)
 
-    # get_filtered_data(split_name, lang, lang_dataset_name)
+    get_filtered_data(split_name, lang, lang_dataset_name)
     transform_to_dataset(lang, split_name, output_name)
 
 if __name__ == "__main__":
