@@ -63,10 +63,9 @@ class ShortQwen:
 
         # Attempt to access the correct attribute depending on model structure
         # Adjust the layers based on the model's internal architecture
-        # print(dir(self.model)) # 如果模型是self.model.model结构，打印其属性
-        # print(dir(self.model.model)) # 如果模型是self.model.model结构，打印其属性
+        # print(dir(self.model)) 
+        # print(dir(self.model.model)) 
         try:
-            # 根据层数初始化importances
             self.importances = [0 for _ in range(self.model.config.num_hidden_layers)]
             # self.importances = [0 for _ in range(len(self.model.model.h))]  # llama layer-wise importance scores
         except AttributeError:

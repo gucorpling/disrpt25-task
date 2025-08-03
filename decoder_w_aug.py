@@ -1,3 +1,4 @@
+import argparse
 import disrptdata
 import util
 import os
@@ -26,13 +27,6 @@ import wandb
 from torch.utils.data import DataLoader
 from transformers import DataCollatorForSeq2Seq
 
-
-# PROMPT = "You will be given two sentences. Please identify the discourse relation between them from the following set of options: contrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction. \nPlease output only the discourse relation label you choose.\n"
-# PROMPT = "You are an expert in discourse analysis. Given two sentences and their directional relationship, please identify the discourse relation between them from the following set of options: contrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction. Please output only the label of the discourse relation you choose."
-# PROMPT = "## Role and Goal:\nYou are an expert in discourse analysis, tasked with identifying the discourse relation between two sentence spans based on the provided label. Your goal is to accurately determine the relationship between these two sentences.\n\n## Guidelines:\n1. You will receive Sentence 1 and Sentence 2. Sentence 1 appears before Sentence 2 in the original text.\n2. You will also be informed about the language of these sentences.\n3. The framework for analysis will be provided, outlining the structure used for discourse analysis.\n4. The direction of the relationship between these two sentences will be given.\n5. You will be provided with a set of labels representing possible discourse relations. Choose one label that best fits the relationship between Sentence 1 and Sentence 2, and output only the chosen label.\n\n## Labels:\ncontrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction"
-# PROMPT = "## Role and Goal:\nYou are an expert in discourse analysis, tasked with identifying the discourse relation between two sentence spans based on the provided label. Your goal is to accurately determine the relationship between these two sentences.\n\n## Guidelines:\n1. You will receive Sentence 1 and Sentence 2. Sentence 1 appears before Sentence 2 in the original text.\n2. You will also be informed about the language of these sentences.\n3. The framework for analysis will be provided, outlining the structure used for discourse analysis.\n4. The direction of the relationship between these two sentences will be given.\n5. You will be given the context in which these two sentences appear.\n6. You will be provided with a set of labels representing possible discourse relations. Choose one label that best fits the relationship between Sentence 1 and Sentence 2, and output only the chosen label.\n\n## Labels:\ncontrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction"
-# PROMPT = "## Role and Goal:\nYou are an expert in discourse analysis, tasked with identifying the discourse relation between two sentence units based on the provided label. Your goal is to accurately determine the relationship between these two units.\n\n## Guidelines:\n1. You will receive Unit1 and Unit2. Unit1 appears before Unit2 in the original text.\n2. You will also be informed about the language of these units.\n3. The framework for analysis will be provided, outlining the structure used for discourse analysis.\n4. The direction of the relationship between these two units will be given.\n5. You will be given the context in which these two units appear.\n6. You will be provided with a set of labels representing possible discourse relations. Choose one label that best fits the relationship between Unit1 and Unit2, and output only the chosen label.\n\n## Labels:\ncontrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction"
-# PROMPT = "## Role and Goal:\nYou are an expert in discourse analysis, tasked with identifying the discourse relation between two sentence units based on the provided label. Your goal is to accurately determine the relationship between these two units.\n\n## Guidelines:\n1. You will receive Unit1 and Unit2. Unit1 appears before Unit2 in the original text.\n2. You will also be informed about the language of these units.\n3. You will also be informed of the corpus from which the data is drawn, which may help guide your analysis.\n4. The framework for analysis will be provided, outlining the structure used for discourse analysis.\n5. You will be given the context in which these two units appear.\n6. The direction of the relationship between these two units will be given.\n7. You will be provided with a set of labels representing possible discourse relations. Choose one label that best fits the relationship between Unit1 and Unit2, and output only the chosen label.\n\n## Labels:\ncontrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction"
 PROMPT = "## Role and Goal:\nYou are an expert in discourse analysis, tasked with identifying the discourse relation between two sentence units based on the provided label. Your goal is to accurately determine the relationship between these two units.\n\n## Guidelines:\n1. You will receive Unit1 and Unit2. Unit1 appears before Unit2 in the original text.\n2. You will also be informed about the language of these units.\n3. You will also be informed of the corpus from which the data is drawn, which may help guide your analysis.\n4. The framework for analysis will be provided, outlining the structure used for discourse analysis.\n5. You will be informed whether Unit1 and Unit2 are spoken by the same speaker.\n6. You will also be given the distance between Unit1 and Unit2.\n7. You will be provided with the percentage position of Unit1 and Unit2 in the original document.\n8. You will be given the context in which these two units appear.\n9. The direction of the relationship between these two units will be given.\n10. You will be provided with a set of labels representing possible discourse relations. Choose one label that best fits the relationship between Unit1 and Unit2, and output only the chosen label.\n\n## Labels:\ncontrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction"
 
 MAX_LENGTH = 32768
@@ -56,8 +50,6 @@ LABELS = [
     "causal",
     "conjunction"
 ]
-# DIRECTION_MAP = {"1>2": "from Sentence1 to Sentence 2", "1<2": "from Sentence2 to Sentence 1", "_": "unknown"}
-# DIRECTION_MAP = {"1>2": "From Sentence1 to Sentence 2.", "1<2": "From Sentence2 to Sentence 1.", "_": "Unknown."}
 DIRECTION_MAP = {"1>2": "From Unit1 to Unit2.", "1<2": "From Unit2 to Unit1.", "_": "Unknown."}
 
 def set_all_seeds(seed: int = 42):
@@ -70,16 +62,8 @@ def set_all_seeds(seed: int = 42):
     set_seed(seed) 
 
 def preprocess_for_finetuning(example, tokenizer):
-    # input = f"The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}"
-    # input = f"## Sentence1:{example['u1']}\n## Sentence2:{example['u2']}\n## Direction:{example['direction']}"
-
     direction = DIRECTION_MAP[example['direction']]
-    # input = f"The direction is {direction}. The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}."
-    # input = f"## Language:\n{example['lang']}\n\n## Framework:\n{example['framework']}\n\n## Direction:\n{direction}\n\n## Sentence1:\n{example['u1']}\n\n## Sentence2:\n{example['u2']}"
     context = f"{example['context'][0]} {example['context'][1]} {example['context'][2]}"
-    # input = f"## Language:\n{example['lang']}\n\n## Framework:\n{example['framework']}\n\n## Direction:\n{direction}\n\n## Context:\n{context}\n\n## Sentence1:\n{example['u1']}\n\n## Sentence2:\n{example['u2']}"
-    # input = f"## Language:\n{example['lang']}\n\n## Framework:\n{example['framework']}\n\n## Direction:\n{direction}\n\n## Context:\n{context}\n\n## Unit1:\n{example['u1']}\n\n## Unit2:\n{example['u2']}"
-    # input = f"## Language:\n{example['lang']}\n\n## Corpus:\n{example['corpus']}## Framework:\n{example['framework']}\n\n## Context:\n{context}\n\n## Direction:\n{direction}\n\n## Unit1:\n{example['u1']}\n\n## Unit2:\n{example['u2']}"
     input = f"## Language:\n{example['lang']}\n\n## Corpus:\n{example['corpus']}## Framework:\n{example['framework']}\n\n## Same Speaker:\n{example['same_speaker']}\n\n## Distance Between Unit1 and Unit2:\n{example['distance']}\n\n## Percentage Position of Unit1:\n{round(example['u1_position'], 4)}\n\n## Percentage Position of Unit2:\n{round(example['u2_position'], 4)}\n\n## Context:\n{context}\n\n## Direction:\n{direction}\n\n## Unit1:\n{example['u1']}\n\n## Unit2:\n{example['u2']}"
 
     input_ids, attention_mask, labels = [], [], []
@@ -99,14 +83,12 @@ def preprocess_for_finetuning(example, tokenizer):
         labels = labels[:MAX_LENGTH]
     return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels} 
 
-def train():
+def train(model_path, checkpoint_path):
     set_all_seeds(42)
-    # os.environ["WANDB_MODE"] = "offline"
     wandb.init(project="qwen3-finetune", name="qwen3-4B-look", resume="allow")
 
     tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B", use_fast=False, trust_remote_code=True)
-    # model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-4B", torch_dtype="auto")
-    model = AutoModelForCausalLM.from_pretrained(f"output/Qwen3-4B-pruned-36to35-1prune_layers", torch_dtype="auto")
+    model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype="auto")
 
     model.enable_input_require_grads()
 
@@ -147,16 +129,14 @@ def train():
     )
 
     args = TrainingArguments(
-        output_dir="output/Qwen3-4B-markdown-context-order-hyper-seed-corpus-3f",
+        output_dir=checkpoint_path,
         per_device_train_batch_size=1,
         per_device_eval_batch_size=1,
         gradient_accumulation_steps=16,
         eval_strategy="epoch",
-        # eval_steps=50,
         logging_steps=10,
         num_train_epochs=1,
         save_strategy="epoch",
-        # save_steps=300,
         learning_rate=5e-5,
         save_on_each_node=False,
         gradient_checkpointing=True,
@@ -182,13 +162,13 @@ def train():
 
     wandb.finish()
 
-def save_accuracy_to_csv(group_stats: dict, checkpoint_name: str, output_dir: str = "intermediate"):
+def save_accuracy_to_csv(group_stats: dict, output_dir):
     os.makedirs(output_dir, exist_ok=True)
-    csv_filename = os.path.join(output_dir, f"{checkpoint_name.split('/')[0]}.csv")
+    csv_filename = os.path.join(output_dir, "accuracy.csv")
 
     with open(csv_filename, mode='w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(['Group', 'Accuracy (%)', 'Correct', 'Total'])  # Header
+        writer.writerow(['Group', 'Accuracy (%)', 'Correct', 'Total'])
 
         for group, stats in group_stats.items():
             acc = stats['correct'] / stats['total'] * 100 if stats['total'] > 0 else 0.0
@@ -196,10 +176,11 @@ def save_accuracy_to_csv(group_stats: dict, checkpoint_name: str, output_dir: st
 
     print(f"Accuracy report saved to: {csv_filename}")
 
-def save_confusion_matrices_to_csv(group_stats: dict, output_dir: str = "confusions"):
+def save_confusion_matrices_to_csv(group_stats: dict, output_dir):
     """
     Save confusion matrices for each group in group_stats to individual CSV files.
     """
+    output_dir = os.path.join(output_dir, "confusions")
     os.makedirs(output_dir, exist_ok=True)
 
     # Get global label set
@@ -258,11 +239,9 @@ def predict(messages, model, tokenizer):
 
     return np.random.choice(LABELS)
 
-def eval():
-    checkpoint_name = "Qwen3-4B-markdown-context-order-hyper-seed-corpus-3f/checkpoint-3827"
+def eval(checkpoint_path, res_path):
     tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B", use_fast=False, trust_remote_code=True)
-    # model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-1.7B", device_map="auto", torch_dtype="auto")
-    model = AutoModelForCausalLM.from_pretrained(f"output/{checkpoint_name}", device_map="auto", torch_dtype="auto")
+    model = AutoModelForCausalLM.from_pretrained(checkpoint_path, device_map="auto", torch_dtype="auto")
 
     dataset = disrptdata.get_combined_dataset(1, 30, include_common_features=True, include_noncommon_features=True, data_type="orig")
     eval_ds = dataset.get('test', [])
@@ -272,15 +251,9 @@ def eval():
     group_stats = defaultdict(lambda: {'correct': 0, 'total': 0, 'preds': [], 'labels': []})
 
     for example in tqdm(eval_ds, desc="Evaluating"):
-        # input = f"The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}"
         direction = DIRECTION_MAP[example['direction']]
-        # input = f"The sentences are:\n\nSentence 1: {example['u1']}\n\nSentence 2: {example['u2']}. The direction is {direction}."
-        # input = f"## Language:\n{example['lang']}\n\n## Framework:\n{example['framework']}\n\n## Direction:\n{direction}\n\n## Sentence1:\n{example['u1']}\n\n## Sentence2:\n{example['u2']}"
         context = f"{example['context'][0]} {example['context'][1]} {example['context'][2]}"
-        # input = f"## Language:\n{example['lang']}\n\n## Framework:\n{example['framework']}\n\n## Direction:\n{direction}\n\n## Context:\n{context}\n\n## Sentence1:\n{example['u1']}\n\n## Sentence2:\n{example['u2']}"
-        # input = f"## Language:\n{example['lang']}\n\n## Corpus:\n{example['corpus']}## Framework:\n{example['framework']}\n\n## Context:\n{context}\n\n## Direction:\n{direction}\n\n## Unit1:\n{example['u1']}\n\n## Unit2:\n{example['u2']}"
         input = f"## Language:\n{example['lang']}\n\n## Corpus:\n{example['corpus']}## Framework:\n{example['framework']}\n\n## Same Speaker:\n{example['same_speaker']}\n\n## Distance Between Unit1 and Unit2:\n{example['distance']}\n\n## Percentage Position of Unit1:\n{round(example['u1_position'], 4)}\n\n## Percentage Position of Unit2:\n{round(example['u2_position'], 4)}\n\n## Context:\n{context}\n\n## Direction:\n{direction}\n\n## Unit1:\n{example['u1']}\n\n## Unit2:\n{example['u2']}"
-
 
         messages = [
             {"role": "system", "content": PROMPT},
@@ -307,17 +280,37 @@ def eval():
             group_stats[key]['preds'].append(pred)
             group_stats[key]['labels'].append(gold)
 
-        save_accuracy_to_csv(group_stats, checkpoint_name)
+    save_accuracy_to_csv(group_stats, res_path)
 
-        save_confusion_matrices_to_csv(group_stats)
+    # save_confusion_matrices_to_csv(group_stats, res_path)
 
-        overall_acc = group_stats['all']['correct'] / group_stats['all']['total'] * 100
-        print(f"\nOverall Accuracy: {overall_acc:.2f}%")
+    overall_acc = group_stats['all']['correct'] / group_stats['all']['total'] * 100
+    print(f"\nOverall Accuracy: {overall_acc:.2f}%")
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train and evaluate the model.")
+    parser.add_argument(
+        '--model_path', type=str, default='JuNymphea/Georgetown-qwen3-4B-pruned-for-disrpt2025', help="Path to the model to be used for training"
+    )
+    parser.add_argument(
+        '--checkpoint_path', type=str, default='checkpoint/', help="Path where the checkpoint will be saved"
+    )
+    parser.add_argument(
+        '--res_path', type=str, default='res/', help="Path where the results will be saved"
+    )
+    return parser.parse_args()
+
+def get_latest_checkpoint(checkpoint_path):
+    checkpoints = [f.path for f in os.scandir(checkpoint_path) if f.is_dir() and f.name.startswith('checkpoint-')]
+    
+    if not checkpoints:
+        raise ValueError(f"No checkpoints found in the directory: {output_dir}")
+
+    latest_checkpoint = max(checkpoints, key=lambda x: int(x.split('-')[-1]))
+    return latest_checkpoint
     
 if __name__ == "__main__":
-    train()
-    # eval()
-
-
-
-
+    args = parse_args()
+    train(args.model_path, args.checkpoint_path)
+    checkpoint_path = get_latest_checkpoint(args.checkpoint_path)
+    eval(checkpoint_path, args.res_path)

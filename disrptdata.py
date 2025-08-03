@@ -24,8 +24,7 @@ def get_meta_features_for_dataset(dataset_name):
 
 def get_list_of_dataset_from_data_dir(data_dir, data_type="all"):
     # Only augmented data
-    # augmented_datasets = ['ces.erst.gum', 'deu.erst.gum', 'deu.pdtb.gum', 'eus.erst.gum','fas.rst.rstdt', 'fra.erst.gum', 'nld.rst.oll', 'nld.rst.sts']
-    augmented_datasets = ['deu.erst.gum', 'deu.pdtb.gum', 'eus.erst.gum','fas.rst.rstdt', 'fra.erst.gum', 'nld.rst.oll', 'nld.rst.sts']
+    augmented_datasets = ['ces.erst.gum', 'deu.erst.gum', 'deu.pdtb.gum', 'eus.erst.gum','fas.rst.rstdt', 'fra.erst.gum', 'nld.rst.oll', 'nld.rst.sts']
     if data_type == "aug":
         return augmented_datasets
     elif data_type == "all":
