@@ -36,6 +36,9 @@ torchrun --nproc_per_node=4 decoder_w_aug.py --mode train --checkpoint_path outp
 * `--nproc_per_node=4`: Number of GPUs to use.
 * `--checkpoint_path`: Directory to save model checkpoints.
 
+#### Training Configuration
+Our experiments were conducted with an effective batch size of 64. This was achieved using 4 GPUs, a per-device batch size of 1, and gradient_accumulation_steps set to 16 `(4 GPUs * 1 batch/GPU * 16 steps = 64)`.
+
 ---
 
 ### Evaluation
@@ -48,7 +51,7 @@ python decoder_w_aug.py --mode eval --checkpoint_path output/checkpoint-3827 --r
 
 * `--mode eval`: Specifies evaluation mode.
 * `--checkpoint_path`: Directory where the checkpoint is stored, from which the model will be loaded. 
-  * As training is configured to save only the final model, there will be a single checkpoint folder. This path should point directly to that folder (e.g., .../output/checkpoint-3827).
+  * As training is configured to save only the final model, there will be a single checkpoint folder. This path should point directly to that folder (e.g., `output/checkpoint-3827`).
 * `--res_path`: Directory to save the prediction results.
 
 To evaluate directly our final model:
