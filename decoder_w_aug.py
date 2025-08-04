@@ -24,6 +24,7 @@ from transformers import (
     set_seed
 )
 import wandb
+os.environ["WANDB_DISABLED"] = "true"
 from torch.utils.data import DataLoader
 from transformers import DataCollatorForSeq2Seq
 
