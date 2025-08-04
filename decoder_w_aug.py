@@ -31,7 +31,7 @@ from transformers import DataCollatorForSeq2Seq
 PROMPT = "## Role and Goal:\nYou are an expert in discourse analysis, tasked with identifying the discourse relation between two sentence units based on the provided label. Your goal is to accurately determine the relationship between these two units.\n\n## Guidelines:\n1. You will receive Unit1 and Unit2. Unit1 appears before Unit2 in the original text.\n2. You will also be informed about the language of these units.\n3. You will also be informed of the corpus from which the data is drawn, which may help guide your analysis.\n4. The framework for analysis will be provided, outlining the structure used for discourse analysis.\n5. You will be informed whether Unit1 and Unit2 are spoken by the same speaker.\n6. You will also be given the distance between Unit1 and Unit2.\n7. You will be provided with the percentage position of Unit1 and Unit2 in the original document.\n8. You will be given the context in which these two units appear.\n9. The direction of the relationship between these two units will be given.\n10. You will be provided with a set of labels representing possible discourse relations. Choose one label that best fits the relationship between Unit1 and Unit2, and output only the chosen label.\n\n## Labels:\ncontrast, condition, mode, organization, frame, temporal, concession, reformulation, comment, query, attribution, alternation, purpose, explanation, elaboration, causal, conjunction"
 
 MAX_LENGTH = 32768
-MAX_RETRIES = 30
+MAX_RETRIES = 1
 LABELS = [
     "contrast",
     "condition",
