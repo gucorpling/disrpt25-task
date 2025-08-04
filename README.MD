@@ -48,6 +48,7 @@ python decoder_w_aug.py --mode eval --checkpoint_path output/checkpoint-3827 --r
 
 * `--mode eval`: Specifies evaluation mode.
 * `--checkpoint_path`: Directory where the checkpoint is stored, from which the model will be loaded. 
+  * As training is configured to save only the final model, there will be a single checkpoint folder. This path should point directly to that folder (e.g., .../output/checkpoint-3827).
 * `--res_path`: Directory to save the prediction results.
 
 To evaluate directly our final model:
