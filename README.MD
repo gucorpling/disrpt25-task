@@ -22,17 +22,42 @@ python -m pip install -r requirements.txt
 
 ## Run
 
-To launch multi-GPU training or inference (e.g., using 4 GPUs), run:
+This project supports multi-GPU training and single-GPU evaluation via the `--mode` flag.
+
+### Training
+
+To train the model using multiple GPUs (e.g., 4 GPUs):
 
 ```bash
-torchrun --nproc_per_node=4 decoder_w_aug.py --checkpoint_path output/ --res_path res/
+torchrun --nproc_per_node=4 decoder_w_aug.py --mode train --checkpoint_path output/
 ```
 
-* `--nproc_per_node=4`: Specifies the number of processes (GPUs) to use.
-* `--checkpoint_path`: Directory to save or load model checkpoints.
-* `--res_path`: Directory where the prediction results will be saved.
+* `--mode train`: Specifies training mode.
+* `--nproc_per_node=4`: Number of GPUs to use.
+* `--checkpoint_path`: Directory to save model checkpoints.
+
+---
+
+### Evaluation
+
+To evaluate the model (usually on a single GPU):
+
+```bash
+python decoder_w_aug.py --mode eval --checkpoint_path output/checkpoint-3827 --res_path res/
+```
+
+* `--mode eval`: Specifies evaluation mode.
+* `--checkpoint_path`: Directory where the checkpoint is stored, from which the model will be loaded. 
+* `--res_path`: Directory to save the prediction results.
+
+To evaluate directly our final model:
+
+```bash
+python decoder_w_aug.py --mode eval --checkpoint_path JuNymphea/Georgetown-qwen3-4B-finetuned-for-disrpt2025 --res_path res/
+```
 
 ## Model Checkpoints
 - [Base model (before fine-tuning)](https://huggingface.co/JuNymphea/Georgetown-qwen3-4B-pruned-for-disrpt2025)
 
 - [Fine-tuned model (trained on task data)](https://huggingface.co/JuNymphea/Georgetown-qwen3-4B-finetuned-for-disrpt2025)
+
