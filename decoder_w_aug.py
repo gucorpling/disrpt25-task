@@ -52,6 +52,9 @@ LABELS = [
 ]
 DIRECTION_MAP = {"1>2": "From Unit1 to Unit2.", "1<2": "From Unit2 to Unit1.", "_": "Unknown."}
 
+def is_main_process():
+    return int(os.environ.get("LOCAL_RANK", 0)) == 0
+
 def set_all_seeds(seed: int = 42):
     random.seed(seed)
     np.random.seed(seed)
@@ -85,7 +88,7 @@ def preprocess_for_finetuning(example, tokenizer):
 
 def train(model_path, checkpoint_path):
     set_all_seeds(42)
-    wandb.init(project="qwen3-finetune", name="qwen3-4B-look", resume="allow")
+    wandb.init(project="qwen3-finetune", name="qwen3-4B", resume="allow", mode="offline")
 
     tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B", use_fast=False, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype="auto")
@@ -166,6 +169,10 @@ def save_accuracy_to_csv(group_stats: dict, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     csv_filename = os.path.join(output_dir, "accuracy.csv")
 
+    # 计算每个组的准确率
+    total_accuracy = 0.0
+    total_groups = len(group_stats)
+
     with open(csv_filename, mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(['Group', 'Accuracy (%)', 'Correct', 'Total'])
@@ -174,7 +181,13 @@ def save_accuracy_to_csv(group_stats: dict, output_dir):
             acc = stats['correct'] / stats['total'] * 100 if stats['total'] > 0 else 0.0
             writer.writerow([group, f"{acc:.2f}", stats['correct'], stats['total']])
 
+            total_accuracy += acc  
+
+        macro_average = total_accuracy / total_groups if total_groups > 0 else 0.0
+        writer.writerow(['Macro-Average', f"{macro_average:.2f}", '', ''])
+
     print(f"Accuracy report saved to: {csv_filename}")
+    print(f"Macro Average Accuracy: {macro_average:.2f}")
 
 def save_confusion_matrices_to_csv(group_stats: dict, output_dir):
     """
@@ -285,32 +298,35 @@ def eval(checkpoint_path, res_path):
     # save_confusion_matrices_to_csv(group_stats, res_path)
 
     overall_acc = group_stats['all']['correct'] / group_stats['all']['total'] * 100
-    print(f"\nOverall Accuracy: {overall_acc:.2f}%")
+    print(f"Micro Average Accuracy: {overall_acc:.2f}")
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train and evaluate the model.")
     parser.add_argument(
-        '--model_path', type=str, default='JuNymphea/Georgetown-qwen3-4B-pruned-for-disrpt2025', help="Path to the model to be used for training"
+        '--mode', type=str, choices=['train', 'eval'], required=True,
+        help="Mode to run: 'train' for training, 'eval' for evaluation"
     )
     parser.add_argument(
-        '--checkpoint_path', type=str, default='checkpoint/', help="Path where the checkpoint will be saved"
+        '--model_path', type=str,
+        default='JuNymphea/Georgetown-qwen3-4B-pruned-for-disrpt2025',
+        help="Path to the model to be used for training"
     )
     parser.add_argument(
-        '--res_path', type=str, default='res/', help="Path where the results will be saved"
+        '--checkpoint_path', type=str, default='checkpoint/',
+        help="Path where the checkpoint will be saved or loaded from"
+    )
+    parser.add_argument(
+        '--res_path', type=str, default='res/',
+        help="Path where the results will be saved (used in eval mode)"
     )
     return parser.parse_args()
-
-def get_latest_checkpoint(checkpoint_path):
-    checkpoints = [f.path for f in os.scandir(checkpoint_path) if f.is_dir() and f.name.startswith('checkpoint-')]
-    
-    if not checkpoints:
-        raise ValueError(f"No checkpoints found in the directory: {output_dir}")
-
-    latest_checkpoint = max(checkpoints, key=lambda x: int(x.split('-')[-1]))
-    return latest_checkpoint
     
 if __name__ == "__main__":
     args = parse_args()
-    train(args.model_path, args.checkpoint_path)
-    checkpoint_path = get_latest_checkpoint(args.checkpoint_path)
-    eval(checkpoint_path, args.res_path)
+
+    if args.mode == 'train':
+        train(args.model_path, args.checkpoint_path)
+
+    elif args.mode == 'eval':
+        checkpoint_path = args.checkpoint_path
+        eval(checkpoint_path, args.res_path)
