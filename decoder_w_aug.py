@@ -221,7 +221,33 @@ def save_confusion_matrices_to_csv(group_stats: dict, output_dir):
             for label, row in zip(all_labels, cm):
                 writer.writerow([label] + list(row))
         print(f"Confusion report saved.")
-        
+
+def write_predictions_to_rels(eval_ds, output_path, original_rels_path):
+    with open(original_rels_path, 'r', encoding='utf-8') as f:
+        original_lines = f.readlines()
+
+    if len(eval_ds) != (len(original_lines) - 1):
+        raise ValueError("The number of predictions does not match the number of data lines in the .rels file")
+
+    new_lines = [original_lines[0].strip()]  
+
+    for example, line in zip(eval_ds, original_lines[1:]): 
+        pred_label = example.get('prediction', 'UNKNOWN')
+        line = line.strip()
+
+        if not line:
+            new_lines.append(line)
+            continue
+
+        parts = line.split('\t')
+        parts[-1] = pred_label  
+        new_line = '\t'.join(parts)
+        new_lines.append(new_line)
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(new_lines) + '\n')  
+
+    print(f"Saved predictions to {output_path}")
 
 def predict(messages, model, tokenizer):
     device = "cuda"
@@ -257,49 +283,32 @@ def eval(checkpoint_path, res_path):
     tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B", use_fast=False, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(checkpoint_path, device_map="auto", torch_dtype="auto")
 
-    dataset = disrptdata.get_combined_dataset(1, 30, include_common_features=True, include_noncommon_features=True, data_type="orig")
-    eval_ds = dataset.get('test', [])
+    dataset_list = disrptdata.get_list_of_dataset_from_data_dir("data/", data_type="orig")
+    for dataset_name in dataset_list:
+        dataset = disrptdata.get_dataset(dataset_name, 1, 30, include_common_features=True, include_noncommon_features=True)
+        eval_ds = dataset.get('test', [])
+        if not eval_ds:
+            continue  
 
-    preds, labels = [], []
+        predictions = []
 
-    group_stats = defaultdict(lambda: {'correct': 0, 'total': 0, 'preds': [], 'labels': []})
+        for example in tqdm(eval_ds, desc="Evaluating"):
+            direction = DIRECTION_MAP[example['direction']]
+            context = f"{example['context'][0]} {example['context'][1]} {example['context'][2]}"
+            input = f"## Language:\n{example['lang']}\n\n## Corpus:\n{example['corpus']}## Framework:\n{example['framework']}\n\n## Same Speaker:\n{example['same_speaker']}\n\n## Distance Between Unit1 and Unit2:\n{example['distance']}\n\n## Percentage Position of Unit1:\n{round(example['u1_position'], 4)}\n\n## Percentage Position of Unit2:\n{round(example['u2_position'], 4)}\n\n## Context:\n{context}\n\n## Direction:\n{direction}\n\n## Unit1:\n{example['u1']}\n\n## Unit2:\n{example['u2']}"
 
-    for example in tqdm(eval_ds, desc="Evaluating"):
-        direction = DIRECTION_MAP[example['direction']]
-        context = f"{example['context'][0]} {example['context'][1]} {example['context'][2]}"
-        input = f"## Language:\n{example['lang']}\n\n## Corpus:\n{example['corpus']}## Framework:\n{example['framework']}\n\n## Same Speaker:\n{example['same_speaker']}\n\n## Distance Between Unit1 and Unit2:\n{example['distance']}\n\n## Percentage Position of Unit1:\n{round(example['u1_position'], 4)}\n\n## Percentage Position of Unit2:\n{round(example['u2_position'], 4)}\n\n## Context:\n{context}\n\n## Direction:\n{direction}\n\n## Unit1:\n{example['u1']}\n\n## Unit2:\n{example['u2']}"
-
-        messages = [
-            {"role": "system", "content": PROMPT},
-            {"role": "user", "content": input}
-        ]
-        pred = predict(messages, model, tokenizer).strip()
-        gold = example['label'].strip()
-
-        example['prediction'] = pred
-        preds.append(pred)
-        labels.append(gold)
-
-        is_correct = int(pred == gold)
-
-        lang = example.get('lang', 'unknown')
-        fw = example.get('framework', 'unknown')
-        corpus = example.get('corpus', 'unknown')
-
-        group_key = f'{lang}_{fw}_{corpus}'
-
-        for key in ['all', group_key]:
-            group_stats[key]['correct'] += is_correct
-            group_stats[key]['total'] += 1
-            group_stats[key]['preds'].append(pred)
-            group_stats[key]['labels'].append(gold)
-
-    save_accuracy_to_csv(group_stats, res_path)
-
-    # save_confusion_matrices_to_csv(group_stats, res_path)
-
-    overall_acc = group_stats['all']['correct'] / group_stats['all']['total'] * 100
-    print(f"Micro Average Accuracy: {overall_acc:.2f}")
+            messages = [
+                {"role": "system", "content": PROMPT},
+                {"role": "user", "content": input}
+            ]
+            pred = predict(messages, model, tokenizer).strip()
+            predictions.append(pred)
+        
+        eval_ds = eval_ds.add_column("prediction", predictions)
+        
+        output_file = f"{res_path}{dataset_name}/{dataset_name}_test.rels"
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        write_predictions_to_rels(eval_ds, output_file, f"data/{dataset_name}/{dataset_name}_test.rels")
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train and evaluate the model.")
