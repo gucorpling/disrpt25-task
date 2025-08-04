@@ -6,3 +6,4 @@ wandb==0.20.1
 tqdm==4.67.1
 scipy==1.15.3
 scikit-learn==1.7.0
+accelerate==1.8.1
