@@ -45,7 +45,7 @@ python decoder_w_aug.py --mode train --checkpoint_path output/
 ```
 
 #### Training Configuration
-Our experiments were conducted with an effective batch size of 64. This was achieved using 4 GPUs, a per_device_batch_size of 1, and gradient_accumulation_steps set to 16 `(4 GPUs * 1 batch/GPU * 16 steps = 64)`.
+Our experiments were conducted with an effective batch size of `64`. This was achieved using `4` GPUs, a `per_device_batch_size` of `1`, and `gradient_accumulation_steps` set to `16` `(4 GPUs * 1 batch/GPU * 16 steps = 64)`.
 
 For single-GPU training, set `gradient_accumulation_steps` to **64** in order to match the effective batch size used in our experiments.
 
