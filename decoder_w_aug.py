@@ -24,7 +24,6 @@ from transformers import (
     set_seed
 )
 import wandb
-os.environ["WANDB_DISABLED"] = "true"
 from torch.utils.data import DataLoader
 from transformers import DataCollatorForSeq2Seq
 
@@ -52,9 +51,6 @@ LABELS = [
     "conjunction"
 ]
 DIRECTION_MAP = {"1>2": "From Unit1 to Unit2.", "1<2": "From Unit2 to Unit1.", "_": "Unknown."}
-
-def is_main_process():
-    return int(os.environ.get("LOCAL_RANK", 0)) == 0
 
 def set_all_seeds(seed: int = 42):
     random.seed(seed)
@@ -114,15 +110,15 @@ def train(model_path, checkpoint_path):
         remove_columns=eval_ds.column_names
     )
 
-    if dist.is_available() and not dist.is_initialized():
+    world_size = int(os.getenv("WORLD_SIZE", "1"))
+    use_distributed = dist.is_available() and world_size > 1
+    if use_distributed and not dist.is_initialized():
         dist.init_process_group(backend="nccl")
-
-    is_distributed = dist.is_available() and dist.is_initialized()
 
     train_sampler = DistributedSampler(
         train_dataset,
         shuffle=False
-    ) if is_distributed else None
+    ) if use_distributed else None
 
     train_dataloader = DataLoader(
         train_dataset,
@@ -170,7 +166,6 @@ def save_accuracy_to_csv(group_stats: dict, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     csv_filename = os.path.join(output_dir, "accuracy.csv")
 
-    # 计算每个组的准确率
     total_accuracy = 0.0
     total_groups = len(group_stats)
 
@@ -249,6 +244,7 @@ def write_predictions_to_rels(eval_ds, output_path, original_rels_path):
 
     print(f"Saved predictions to {output_path}")
 
+        
 def predict(messages, model, tokenizer):
     device = "cuda"
     text = tokenizer.apply_chat_template(
