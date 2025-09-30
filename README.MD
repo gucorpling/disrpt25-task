@@ -1,5 +1,10 @@
 # Georgetown University Team for DISRPT 2025 Shared Task
 
+🚀 **Try our demo on Hugging Face Spaces:**  
+👉 [Dedisco Demo](https://huggingface.co/spaces/JuNymphea/Dedisco)
+
+---
+
 ## Setup
 
 We use conda for maintaining a python Dev environment and `requirements.txt` for cataloguing the dependencies
